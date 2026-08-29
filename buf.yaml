@@ -1,0 +1,10 @@
+# buf.yaml — protobuf linting configuration
+version: v2
+lint:
+  use:
+    - DEFAULT
+  except:
+    - PACKAGE_VERSION_SUFFIX
+  disallow_comment_ignores: false
+modules:
+  - path: proto

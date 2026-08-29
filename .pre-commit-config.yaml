@@ -1,0 +1,94 @@
+# Copyright 2024 OmniCopilot Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Pre-commit hooks — run automatically before every commit.
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # ─── General ─────────────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+        exclude: '\.ipynb$'
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+      - id: no-commit-to-branch
+        args: ['--branch', 'main', '--branch', 'master']
+
+  # ─── Python: Ruff (Linting + Formatting) ─────────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.4
+    hooks:
+      - id: ruff
+        args: ['--fix', '--exit-non-zero-on-fix']
+        types_or: [python, pyi]
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  # ─── Python: Type Checking ───────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - pydantic>=2.6
+          - numpy>=1.26
+          - types-protobuf>=4.25
+        args: ['--config-file=pyproject.toml']
+        pass_filenames: false
+        files: '^python/'
+
+  # ─── C++: clang-format ───────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v17.0.6
+    hooks:
+      - id: clang-format
+        types_or: [c, c++]
+        args: ['--style=file']
+
+  # ─── Protobuf: Linting ──────────────────────────────────────────────────
+  - repo: https://github.com/bufbuild/buf
+    rev: v1.30.0
+    hooks:
+      - id: buf-lint
+        args: ['--config', 'buf.yaml']
+
+  # ─── YAML / TOML / Markdown ─────────────────────────────────────────────
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: ['-c', '.yamllint.yml']
+
+  # ─── Commit Message ─────────────────────────────────────────────────────
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.1.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: ['feat', 'fix', 'docs', 'style', 'refactor', 'perf', 'test', 'build', 'ci', 'chore']
+
+  # ─── Security: Detect Secrets ────────────────────────────────────────────
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: '(uv\.lock|\.ipynb)$'
+
+# CI configuration
+ci:
+  autofix_commit_msg: 'style: auto-fix pre-commit hooks'
+  autoupdate_commit_msg: 'chore: update pre-commit hooks'
+  skip: [mypy]  # mypy is slow — run in CI instead of on every commit

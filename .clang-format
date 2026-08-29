@@ -1,0 +1,55 @@
+# Copyright 2024 OmniCopilot Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# C++ formatting style — based on Google style with minor adjustments.
+
+BasedOnStyle: Google
+Language: Cpp
+Standard: c++17
+
+# Line length
+ColumnLimit: 100
+
+# Indentation
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+IndentCaseLabels: true
+NamespaceIndentation: None
+
+# Braces
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+# Includes
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^"'
+    Priority: 1
+  - Regex: '^<omnicopilot/'
+    Priority: 2
+  - Regex: '^<google/protobuf'
+    Priority: 3
+  - Regex: '^<spdlog'
+    Priority: 4
+  - Regex: '^<'
+    Priority: 5
+
+# Alignment
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignTrailingComments: true
+
+# Pointer/reference alignment
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+
+# Other
+SpaceAfterCStyleCast: false
+SpacesInContainerLiterals: false
+ReflowComments: true

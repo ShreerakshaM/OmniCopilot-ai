@@ -1,0 +1,78 @@
+# ─── Build artifacts ─────────────────────────────────────────────────────────
+build/
+cmake-build-*/
+*.o
+*.so
+*.dylib
+*.a
+compile_commands.json
+
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+.eggs/
+*.whl
+.venv/
+venv/
+env/
+
+# ─── Type checking / Lint ────────────────────────────────────────────────────
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# ─── Coverage ────────────────────────────────────────────────────────────────
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# ─── IDE ─────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ─── Jupyter ─────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ─── Data (managed by DVC, not git) ─────────────────────────────────────────
+data/raw/
+data/processed/
+data/models/
+data/results/
+!data/.gitkeep
+
+# ─── Secrets ─────────────────────────────────────────────────────────────────
+.env
+.env.*
+*.pem
+*.key
+.secrets.baseline
+
+# ─── Docker ──────────────────────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ─── Experiment outputs ──────────────────────────────────────────────────────
+outputs/
+multirun/
+wandb/
+
+# ─── Generated protobuf code ────────────────────────────────────────────────
+python/omnicopilot/generated/
+*_pb2.py
+*_pb2_grpc.py
+*_pb2.pyi
+
+# ─── OS files ────────────────────────────────────────────────────────────────
+Thumbs.db
+.DS_Store
+
+# ─── uv / pip ────────────────────────────────────────────────────────────────
+uv.lock
