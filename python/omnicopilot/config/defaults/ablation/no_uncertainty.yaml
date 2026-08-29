@@ -1,0 +1,9 @@
+# Ablation: remove uncertainty-aware reasoning.
+# Replace probabilistic confidence with binary (detected / not detected).
+
+name: ablation_no_uncertainty
+description: "Ablation — remove uncertainty. Binary confidence only."
+
+fusion:
+  algorithm: weighted_average
+  trust_weight: 0.0  # Ignore trust weighting.

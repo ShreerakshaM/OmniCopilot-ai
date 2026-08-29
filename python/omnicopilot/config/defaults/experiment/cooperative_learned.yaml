@@ -1,0 +1,19 @@
+# Learned cooperative — RL communication policy.
+# The main experiment: does learning beat hand-designed?
+
+name: cooperative_learned
+description: "Cooperative perception with RL-learned communication policy."
+
+num_agents: 5
+
+communication:
+  policy: learned
+  bandwidth_bps: 6.0e+6
+  latency_ms: 20.0
+  packet_loss_rate: 0.05
+  budget_bytes_per_tick: 4096
+  policy_checkpoint: data/models/communication_policy/best.pt
+
+active_acquisition:
+  enabled: true
+  max_requests_per_tick: 3

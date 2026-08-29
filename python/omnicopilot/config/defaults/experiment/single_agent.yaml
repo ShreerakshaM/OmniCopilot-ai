@@ -1,0 +1,21 @@
+# Single agent baseline — no cooperation at all.
+# Used to establish: "What can ONE agent achieve alone?"
+
+defaults:
+  - override /communication: null
+
+name: single_agent
+description: "Single agent baseline — no cooperation, no communication."
+
+num_agents: 1
+
+communication:
+  policy: none
+  bandwidth_bps: 0
+  budget_bytes_per_tick: 0
+
+active_acquisition:
+  enabled: false
+
+trust:
+  enabled: false

@@ -1,0 +1,6 @@
+# V2VNet cooperative perception model.
+model_name: v2vnet
+checkpoint_path: data/models/v2vnet_opv2v.pth
+confidence_threshold: 0.3
+nms_threshold: 0.5
+max_detections: 100

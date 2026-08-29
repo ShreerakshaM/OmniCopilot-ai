@@ -1,0 +1,12 @@
+# Ablation: remove intelligent prioritization.
+# Random message selection within bandwidth budget.
+
+name: ablation_no_prioritization
+description: "Ablation — random message selection instead of intelligent prioritization."
+
+communication:
+  policy: random
+  bandwidth_bps: 6.0e+6
+  latency_ms: 20.0
+  packet_loss_rate: 0.05
+  budget_bytes_per_tick: 4096

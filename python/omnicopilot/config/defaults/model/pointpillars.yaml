@@ -1,0 +1,6 @@
+# PointPillars 3D detection model configuration.
+model_name: pointpillars
+checkpoint_path: data/models/pointpillars_opv2v.pth
+confidence_threshold: 0.3
+nms_threshold: 0.5
+max_detections: 100

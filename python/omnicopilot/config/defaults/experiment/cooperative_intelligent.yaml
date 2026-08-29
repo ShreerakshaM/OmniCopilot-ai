@@ -1,0 +1,23 @@
+# Intelligent cooperative — hand-designed prioritization under bandwidth constraints.
+# Shows: can intelligent communication match unlimited sharing at less bandwidth?
+
+name: cooperative_intelligent
+description: "Cooperative perception with hand-designed intelligent communication under constraints."
+
+num_agents: 5
+
+communication:
+  policy: hand_designed
+  bandwidth_bps: 6.0e+6
+  latency_ms: 20.0
+  packet_loss_rate: 0.05
+  budget_bytes_per_tick: 4096
+  safety_weight: 0.35
+  novelty_weight: 0.20
+  confidence_weight: 0.15
+  time_sensitivity_weight: 0.15
+  receiver_benefit_weight: 0.15
+
+active_acquisition:
+  enabled: true
+  max_requests_per_tick: 3

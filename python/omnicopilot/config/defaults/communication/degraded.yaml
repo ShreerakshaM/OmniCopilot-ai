@@ -1,0 +1,6 @@
+# Degraded network — high loss, high latency.
+# For robustness experiments.
+bandwidth_bps: 2.0e+6
+latency_ms: 100.0
+packet_loss_rate: 0.20
+budget_bytes_per_tick: 1280

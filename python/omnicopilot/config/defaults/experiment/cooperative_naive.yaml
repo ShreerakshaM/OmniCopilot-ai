@@ -1,0 +1,17 @@
+# Naive cooperative — share everything, no intelligence.
+# Baseline: what does unlimited, unfiltered sharing achieve?
+
+name: cooperative_naive
+description: "Cooperative perception with unlimited communication (no prioritization)."
+
+num_agents: 5
+
+communication:
+  policy: none
+  bandwidth_bps: 1.0e+9  # Effectively unlimited.
+  latency_ms: 0.0
+  packet_loss_rate: 0.0
+  budget_bytes_per_tick: 1000000
+
+active_acquisition:
+  enabled: false

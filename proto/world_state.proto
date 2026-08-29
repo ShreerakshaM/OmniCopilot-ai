@@ -1,0 +1,125 @@
+// Copyright 2024 OmniCopilot Authors
+// SPDX-License-Identifier: Apache-2.0
+//
+// World state definitions.
+// Represents a complete snapshot of the shared world model at a point in time.
+
+syntax = "proto3";
+package omnicopilot;
+
+option cc_enable_arenas = true;
+
+import "google/protobuf/timestamp.proto";
+import "entity.proto";
+import "observation.proto";
+
+// Event detected by the collective system
+message WorldEvent {
+  string event_id = 1;
+
+  enum EventType {
+    EVENT_UNKNOWN = 0;
+    EVENT_EMERGENCY_BRAKING = 1;
+    EVENT_COLLISION = 2;
+    EVENT_NEAR_MISS = 3;
+    EVENT_HAZARD_DETECTED = 4;
+    EVENT_ROAD_OBSTRUCTION = 5;
+    EVENT_WEATHER_DEGRADATION = 6;
+    EVENT_SENSOR_FAILURE = 7;
+    EVENT_AGENT_ANOMALY = 8;
+    EVENT_NEW_ENTITY_APPEARED = 9;
+    EVENT_ENTITY_LOST = 10;
+    EVENT_CONFIDENCE_DROP = 11;
+  }
+
+  EventType event_type = 2;
+  double severity = 3;                    // [0.0, 1.0]
+  double confidence = 4;
+  Position3D location = 5;
+  google.protobuf.Timestamp detected_at = 6;
+  repeated string related_entity_ids = 7;
+  repeated string reporting_agent_ids = 8;
+  string description = 9;
+}
+
+// Per-agent reliability/trust assessment
+message AgentReliability {
+  string agent_id = 1;
+  double trust_score = 2;                 // [0.0, 1.0]
+  double accuracy_recent = 3;             // Accuracy over recent window
+  double accuracy_lifetime = 4;           // Accuracy over all time
+  uint64 total_observations = 5;
+  uint64 verified_correct = 6;
+  uint64 verified_incorrect = 7;
+  uint64 unverified = 8;
+  google.protobuf.Timestamp last_seen = 9;
+
+  // Contextual reliability (optional — learned over time)
+  map<string, double> context_reliability = 10;  // e.g. "rain" → 0.72
+}
+
+// Zone of uncertainty — area where the system knows it has poor coverage
+message UncertaintyZone {
+  Position3D center = 1;
+  double radius_m = 2;
+  double max_confidence_in_zone = 3;      // Highest entity confidence in this area
+  repeated string nearby_agent_ids = 4;   // Agents that might have visibility
+  bool acquisition_requested = 5;
+}
+
+// Complete world state snapshot
+message WorldState {
+  // Metadata
+  google.protobuf.Timestamp timestamp = 1;
+  uint64 tick = 2;                        // Simulation tick / frame number
+  uint64 state_version = 3;              // Monotonically increasing version
+
+  // All tracked entities
+  repeated Entity entities = 4;
+
+  // Entity relationships
+  repeated EntityRelationship relationships = 5;
+
+  // Active events
+  repeated WorldEvent events = 6;
+
+  // Agent states and reliability
+  repeated AgentState agent_states = 7;
+  repeated AgentReliability agent_reliabilities = 8;
+
+  // Uncertainty map — areas with poor coverage
+  repeated UncertaintyZone uncertainty_zones = 9;
+
+  // Aggregate statistics
+  WorldModelStats stats = 10;
+}
+
+// Aggregate statistics about the world model
+message WorldModelStats {
+  uint32 total_entities = 1;
+  uint32 confirmed_entities = 2;
+  uint32 tentative_entities = 3;
+  uint32 predicted_entities = 4;
+  uint32 stale_entities = 5;
+  uint32 active_agents = 6;
+  double mean_entity_confidence = 7;
+  double mean_agent_trust = 8;
+  uint32 active_events = 9;
+  uint32 uncertainty_zones = 10;
+  uint32 pending_acquisitions = 11;
+}
+
+// Delta update to world state (for efficient communication)
+message WorldStateDelta {
+  uint64 base_version = 1;               // Version this delta applies to
+  uint64 new_version = 2;
+
+  repeated Entity added_entities = 3;
+  repeated Entity updated_entities = 4;
+  repeated string removed_entity_ids = 5;
+
+  repeated WorldEvent new_events = 6;
+  repeated string resolved_event_ids = 7;
+
+  repeated AgentReliability updated_reliabilities = 8;
+}

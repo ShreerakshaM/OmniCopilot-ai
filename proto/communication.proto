@@ -1,0 +1,207 @@
+// Copyright 2024 OmniCopilot Authors
+// SPDX-License-Identifier: Apache-2.0
+//
+// Communication protocol definitions.
+// Defines messages exchanged between agents through the intelligent V2X layer.
+
+syntax = "proto3";
+package omnicopilot;
+
+option cc_enable_arenas = true;
+
+import "google/protobuf/timestamp.proto";
+import "observation.proto";
+import "entity.proto";
+
+// Priority level for message transmission
+enum MessagePriority {
+  MESSAGE_PRIORITY_LOW = 0;
+  MESSAGE_PRIORITY_MEDIUM = 1;
+  MESSAGE_PRIORITY_HIGH = 2;
+  MESSAGE_PRIORITY_CRITICAL = 3;
+  MESSAGE_PRIORITY_EMERGENCY = 4;
+}
+
+// Reason a message was prioritized
+enum PrioritizationReason {
+  PRIORITIZATION_UNKNOWN = 0;
+  PRIORITIZATION_SAFETY_CRITICAL = 1;
+  PRIORITIZATION_HIGH_NOVELTY = 2;
+  PRIORITIZATION_UNCERTAINTY_REDUCTION = 3;
+  PRIORITIZATION_ACTIVE_REQUEST_RESPONSE = 4;
+  PRIORITIZATION_THREAT_RELATED = 5;
+  PRIORITIZATION_EVENT_NOTIFICATION = 6;
+}
+
+// Message sent from one agent to another (or broadcast)
+message CooperativeMessage {
+  // Message metadata
+  string message_id = 1;
+  string sender_id = 2;
+  string receiver_id = 3;           // Empty string = broadcast
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp transmitted_at = 5;
+  uint32 size_bytes = 6;
+
+  // Priority and scheduling
+  MessagePriority priority = 7;
+  PrioritizationReason reason = 8;
+  double information_value = 9;     // Estimated value to receiver [0.0, 1.0]
+
+  // Payload — one of the following
+  oneof payload {
+    ObservationPayload observations = 10;
+    EventNotification event = 11;
+    InformationRequest request = 12;
+    InformationResponse response = 13;
+    AgentStatusUpdate status = 14;
+  }
+
+  // Communication policy metadata (for analysis)
+  PolicyMetadata policy_metadata = 15;
+}
+
+// Payload: batch of observations selected for transmission
+message ObservationPayload {
+  repeated Observation observations = 1;
+  AgentState sender_state = 2;
+
+  // How many observations were available vs. selected
+  uint32 total_available = 3;
+  uint32 selected_for_transmission = 4;
+}
+
+// Payload: event notification
+message EventNotification {
+  WorldEvent event = 1;
+  double urgency = 2;  // [0.0, 1.0]
+}
+
+// Payload: active information request
+message InformationRequest {
+  string request_id = 1;
+
+  enum RequestType {
+    REQUEST_UNKNOWN = 0;
+    REQUEST_OBSERVATION_AT_LOCATION = 1;  // "What do you see at [X,Y]?"
+    REQUEST_CONFIRM_ENTITY = 2;           // "Can you verify entity X?"
+    REQUEST_TRACK_ENTITY = 3;             // "Keep watching entity X"
+    REQUEST_SCAN_AREA = 4;                // "Scan this area for objects"
+  }
+
+  RequestType request_type = 2;
+  Position3D target_location = 3;
+  string target_entity_id = 4;
+  double search_radius_m = 5;
+  double expected_information_gain = 6;   // Why this agent was selected
+  google.protobuf.Timestamp deadline = 7; // Response needed by this time
+}
+
+// Payload: response to an information request
+message InformationResponse {
+  string request_id = 1;                  // Matches the original request
+
+  enum ResponseStatus {
+    RESPONSE_SUCCESS = 0;
+    RESPONSE_NO_VISIBILITY = 1;           // Can't see that location
+    RESPONSE_TIMEOUT = 2;
+    RESPONSE_BUSY = 3;                    // Too many outstanding requests
+  }
+
+  ResponseStatus status = 2;
+  repeated Observation observations = 3;  // What was found (if any)
+  AgentState responder_state = 4;
+}
+
+// Payload: agent status update
+message AgentStatusUpdate {
+  AgentState state = 1;
+
+  enum AgentHealth {
+    AGENT_HEALTHY = 0;
+    AGENT_DEGRADED = 1;                   // Some sensors impaired
+    AGENT_CRITICAL = 2;                   // Major capability loss
+    AGENT_DISCONNECTING = 3;
+  }
+
+  AgentHealth health = 2;
+  repeated string impaired_sensors = 3;   // Which sensors are degraded
+  double remaining_bandwidth_fraction = 4;
+}
+
+// Metadata about the communication policy decision
+message PolicyMetadata {
+  // Which policy made this decision
+  enum PolicyType {
+    POLICY_HAND_DESIGNED = 0;
+    POLICY_LEARNED = 1;
+  }
+
+  PolicyType policy_type = 1;
+
+  // Scoring breakdown (for interpretability)
+  double safety_score = 2;
+  double novelty_score = 3;
+  double confidence_score = 4;
+  double time_sensitivity_score = 5;
+  double receiver_benefit_score = 6;
+
+  // What the policy considered but suppressed
+  uint32 suppressed_count = 7;
+  double total_suppressed_value = 8;
+
+  // Network state at decision time
+  NetworkState network_state = 9;
+}
+
+// Current network conditions
+message NetworkState {
+  double available_bandwidth_bps = 1;     // Bits per second available
+  double current_latency_ms = 2;          // One-way latency
+  double packet_loss_rate = 3;            // [0.0, 1.0]
+  double channel_utilization = 4;         // [0.0, 1.0]
+  uint32 queue_depth = 5;                 // Messages waiting in queue
+  double estimated_delivery_time_ms = 6;
+}
+
+// Channel configuration (simulation parameters)
+message ChannelConfig {
+  double max_bandwidth_bps = 1;
+  double base_latency_ms = 2;
+  double latency_jitter_ms = 3;
+  double packet_loss_rate = 4;
+  uint32 max_queue_depth = 5;
+
+  enum LossModel {
+    LOSS_MODEL_BERNOULLI = 0;             // Independent random loss
+    LOSS_MODEL_GILBERT_ELLIOTT = 1;       // Bursty loss
+  }
+
+  LossModel loss_model = 6;
+  double gilbert_good_to_bad = 7;         // Transition probability (for Gilbert-Elliott)
+  double gilbert_bad_to_good = 8;
+}
+
+// Communication statistics for a single agent over a time window
+message CommunicationStats {
+  string agent_id = 1;
+  google.protobuf.Timestamp window_start = 2;
+  google.protobuf.Timestamp window_end = 3;
+
+  uint64 messages_sent = 4;
+  uint64 messages_received = 5;
+  uint64 messages_dropped = 6;           // Lost due to network
+  uint64 messages_suppressed = 7;        // Suppressed by policy
+
+  uint64 bytes_sent = 8;
+  uint64 bytes_received = 9;
+
+  double mean_information_value_sent = 10;
+  double mean_information_value_suppressed = 11;
+
+  uint32 requests_sent = 12;
+  uint32 requests_received = 13;
+  uint32 requests_fulfilled = 14;
+
+  double bandwidth_utilization = 15;     // [0.0, 1.0]
+}

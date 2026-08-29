@@ -1,0 +1,6 @@
+# CenterPoint 3D detection model configuration.
+model_name: centerpoint
+checkpoint_path: data/models/centerpoint_opv2v.pth
+confidence_threshold: 0.25
+nms_threshold: 0.45
+max_detections: 150

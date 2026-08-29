@@ -1,0 +1,9 @@
+# Ablation: remove receiver-awareness.
+# Prioritize without modelling what the receiver already knows.
+
+name: ablation_no_receiver_awareness
+description: "Ablation — prioritize without modelling receiver belief state."
+
+communication:
+  policy: hand_designed
+  receiver_benefit_weight: 0.0  # Disable receiver modelling.

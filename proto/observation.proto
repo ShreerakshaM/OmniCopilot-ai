@@ -1,0 +1,163 @@
+// Copyright 2024 OmniCopilot Authors
+// SPDX-License-Identifier: Apache-2.0
+//
+// Observation message definitions.
+// An Observation represents a single detection from an agent's perception system.
+
+syntax = "proto3";
+package omnicopilot;
+
+option cc_enable_arenas = true;
+
+import "google/protobuf/timestamp.proto";
+
+// 3D position in world coordinates (meters)
+message Position3D {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+// 3D velocity vector (meters/second)
+message Velocity3D {
+  double vx = 1;
+  double vy = 2;
+  double vz = 3;
+}
+
+// 3D acceleration vector (meters/second^2)
+message Acceleration3D {
+  double ax = 1;
+  double ay = 2;
+  double az = 3;
+}
+
+// Oriented 3D bounding box
+message BoundingBox3D {
+  Position3D center = 1;
+  double length = 2;   // Along heading direction (meters)
+  double width = 3;    // Perpendicular to heading (meters)
+  double height = 4;   // Vertical extent (meters)
+  double heading = 5;  // Yaw angle in radians [-pi, pi]
+}
+
+// 2D bounding box in image coordinates (pixels)
+message BoundingBox2D {
+  double x_min = 1;
+  double y_min = 2;
+  double x_max = 3;
+  double y_max = 4;
+}
+
+// Object classification
+enum ObjectClass {
+  OBJECT_CLASS_UNKNOWN = 0;
+  OBJECT_CLASS_VEHICLE = 1;
+  OBJECT_CLASS_PEDESTRIAN = 2;
+  OBJECT_CLASS_CYCLIST = 3;
+  OBJECT_CLASS_MOTORCYCLE = 4;
+  OBJECT_CLASS_TRUCK = 5;
+  OBJECT_CLASS_BUS = 6;
+  OBJECT_CLASS_STATIC_OBSTACLE = 7;
+  OBJECT_CLASS_TRAFFIC_SIGN = 8;
+  OBJECT_CLASS_TRAFFIC_LIGHT = 9;
+  OBJECT_CLASS_CONSTRUCTION_ZONE = 10;
+  OBJECT_CLASS_ANIMAL = 11;
+}
+
+// Sensor modality that produced this observation
+enum SensorType {
+  SENSOR_TYPE_UNKNOWN = 0;
+  SENSOR_TYPE_CAMERA = 1;
+  SENSOR_TYPE_LIDAR = 2;
+  SENSOR_TYPE_RADAR = 3;
+  SENSOR_TYPE_FUSED = 4;       // Multi-sensor fusion output
+  SENSOR_TYPE_COOPERATIVE = 5;  // Received from another agent
+}
+
+// Uncertainty representation for a single observation
+message ObservationUncertainty {
+  // Position covariance (diagonal: σ²_x, σ²_y, σ²_z)
+  double position_variance_x = 1;
+  double position_variance_y = 2;
+  double position_variance_z = 3;
+
+  // Velocity covariance (diagonal: σ²_vx, σ²_vy, σ²_vz)
+  double velocity_variance_x = 4;
+  double velocity_variance_y = 5;
+  double velocity_variance_z = 6;
+
+  // Classification uncertainty (entropy of class distribution)
+  double classification_entropy = 7;
+
+  // Overall detection confidence [0.0, 1.0]
+  double detection_confidence = 8;
+}
+
+// A single observation from an agent's perception system
+message Observation {
+  // Unique identifier for this observation instance
+  string observation_id = 1;
+
+  // Agent that produced this observation
+  string agent_id = 2;
+
+  // Tracked object identifier (stable across frames for same physical object)
+  string track_id = 3;
+
+  // Classification
+  ObjectClass object_class = 4;
+
+  // Per-class confidence scores (top-K classes)
+  repeated ClassScore class_scores = 5;
+
+  // Kinematic state
+  Position3D position = 6;
+  Velocity3D velocity = 7;
+  Acceleration3D acceleration = 8;
+
+  // Bounding box
+  BoundingBox3D bbox_3d = 9;
+  BoundingBox2D bbox_2d = 10;  // Optional, if camera-derived
+
+  // Uncertainty
+  ObservationUncertainty uncertainty = 11;
+
+  // Metadata
+  SensorType sensor_type = 12;
+  google.protobuf.Timestamp timestamp = 13;
+  uint64 frame_id = 14;
+
+  // Observation age at transmission time (nanoseconds)
+  uint64 age_ns = 15;
+
+  // Whether this observation is occluded from the observing agent's primary sensor
+  bool is_partially_occluded = 16;
+  double occlusion_ratio = 17;  // [0.0, 1.0] — fraction of object occluded
+}
+
+// Per-class confidence score
+message ClassScore {
+  ObjectClass object_class = 1;
+  double score = 2;
+}
+
+// Batch of observations from a single agent at a single timestep
+message ObservationBatch {
+  string agent_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  uint64 frame_id = 3;
+  repeated Observation observations = 4;
+
+  // Agent's own state at observation time
+  AgentState agent_state = 5;
+}
+
+// State of the observing agent itself
+message AgentState {
+  string agent_id = 1;
+  Position3D position = 2;
+  Velocity3D velocity = 3;
+  double heading = 4;  // Yaw in radians
+  google.protobuf.Timestamp timestamp = 5;
+}

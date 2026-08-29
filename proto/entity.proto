@@ -1,0 +1,127 @@
+// Copyright 2024 OmniCopilot Authors
+// SPDX-License-Identifier: Apache-2.0
+//
+// Entity definitions for the shared world model.
+// An Entity is the fused representation of a real-world object
+// maintained by the world model from multiple observations.
+
+syntax = "proto3";
+package omnicopilot;
+
+option cc_enable_arenas = true;
+
+import "google/protobuf/timestamp.proto";
+import "observation.proto";
+
+// Lifecycle state of an entity in the world model
+enum EntityState {
+  ENTITY_STATE_UNKNOWN = 0;
+  ENTITY_STATE_TENTATIVE = 1;    // Seen by one source, not yet confirmed
+  ENTITY_STATE_CONFIRMED = 2;    // Corroborated by multiple sources
+  ENTITY_STATE_PREDICTED = 3;    // No recent observation, position predicted
+  ENTITY_STATE_STALE = 4;        // Not observed recently, confidence decaying
+  ENTITY_STATE_LOST = 5;         // Marked for removal
+}
+
+// Threat level classification
+enum ThreatLevel {
+  THREAT_LEVEL_NONE = 0;
+  THREAT_LEVEL_LOW = 1;
+  THREAT_LEVEL_MEDIUM = 2;
+  THREAT_LEVEL_HIGH = 3;
+  THREAT_LEVEL_CRITICAL = 4;
+}
+
+// Evidence from a single source supporting this entity
+message Evidence {
+  string agent_id = 1;
+  string observation_id = 2;
+  double confidence = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  SensorType sensor_type = 5;
+}
+
+// Predicted future state at a specific time horizon
+message PredictedState {
+  double time_horizon_s = 1;     // Seconds into the future
+  Position3D position = 2;
+  Velocity3D velocity = 3;
+  double confidence = 4;         // Prediction confidence (decays with horizon)
+  BoundingBox3D bbox_3d = 5;
+}
+
+// Full covariance matrix (6x6 for position + velocity)
+message StateCovariance {
+  // Row-major 6x6 matrix [x, y, z, vx, vy, vz]
+  repeated double values = 1;    // 36 elements
+}
+
+// A fused entity in the shared world model
+message Entity {
+  // Unique entity identifier (stable across time)
+  string entity_id = 1;
+
+  // Classification (fused from multiple observations)
+  ObjectClass object_class = 2;
+  repeated ClassScore class_distribution = 3;
+
+  // Fused kinematic state (best estimate)
+  Position3D position = 4;
+  Velocity3D velocity = 5;
+  Acceleration3D acceleration = 6;
+  double heading = 7;
+  double heading_rate = 8;       // Yaw rate (rad/s)
+
+  // Bounding box (fused)
+  BoundingBox3D bbox_3d = 9;
+
+  // Uncertainty (full state covariance)
+  StateCovariance covariance = 10;
+
+  // Overall entity confidence [0.0, 1.0]
+  // Combines detection confidence, source count, temporal consistency
+  double confidence = 11;
+
+  // Entity lifecycle
+  EntityState state = 12;
+  google.protobuf.Timestamp first_seen = 13;
+  google.protobuf.Timestamp last_updated = 14;
+  uint32 observation_count = 15;        // Total observations contributing
+  uint32 unique_source_count = 16;      // Number of distinct agents that saw this
+
+  // Evidence provenance — which agents/observations support this entity
+  repeated Evidence supporting_evidence = 17;
+
+  // Predictions
+  repeated PredictedState predictions = 18;
+
+  // Safety assessment
+  ThreatLevel threat_level = 19;
+  double time_to_collision_s = 20;      // -1 if not applicable
+
+  // Flags
+  bool needs_corroboration = 21;        // Only one source, uncertain
+  bool is_safety_critical = 22;         // Requires priority communication
+  bool active_acquisition_pending = 23; // Information request outstanding
+}
+
+// Spatial relationship between two entities
+message EntityRelationship {
+  string entity_id_a = 1;
+  string entity_id_b = 2;
+
+  enum RelationType {
+    RELATION_UNKNOWN = 0;
+    RELATION_FOLLOWING = 1;       // A following B
+    RELATION_APPROACHING = 2;    // A and B converging
+    RELATION_DIVERGING = 3;      // A and B separating
+    RELATION_PARALLEL = 4;       // Moving in same direction
+    RELATION_CROSSING = 5;       // Trajectories intersect
+    RELATION_STATIONARY_NEAR = 6;
+  }
+
+  RelationType relation = 3;
+  double distance_m = 4;
+  double closing_speed_mps = 5;  // Positive = approaching
+  double time_to_closest_approach_s = 6;
+}

@@ -1,0 +1,8 @@
+# Ablation: remove active information acquisition.
+# Only passive sharing — never request information.
+
+name: ablation_no_active_acquisition
+description: "Ablation — passive sharing only, no active information requests."
+
+active_acquisition:
+  enabled: false

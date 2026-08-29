@@ -1,0 +1,121 @@
+# Copyright 2024 OmniCopilot Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Docker Compose for full OmniCopilot development and experiment environment.
+# Usage:
+#   docker compose up runtime        # Core runtime only
+#   docker compose up ml             # ML training with GPU
+#   docker compose up observability  # Prometheus + Grafana
+#   docker compose up                # Everything
+
+services:
+  # ─── Core Runtime ──────────────────────────────────────────────────────────
+  runtime:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.runtime
+    container_name: omnicopilot-runtime
+    volumes:
+      - ../data:/app/data
+      - ../python:/app/python
+      - ../scripts:/app/scripts
+    environment:
+      - OMNICOPILOT_LOG_LEVEL=INFO
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
+    networks:
+      - omnicopilot
+
+  # ─── ML Training (GPU) ────────────────────────────────────────────────────
+  ml:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ml
+    container_name: omnicopilot-ml
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - ../data:/workspace/data
+      - ../python:/workspace/python
+      - ../scripts:/workspace/scripts
+      - ../notebooks:/workspace/notebooks
+    ports:
+      - "8888:8888"   # Jupyter Lab
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
+      - OMNICOPILOT_LOG_LEVEL=INFO
+    networks:
+      - omnicopilot
+
+  # ─── Vector Database (RAG) ────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.8.1
+    container_name: omnicopilot-qdrant
+    ports:
+      - "6333:6333"   # REST API
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - omnicopilot
+
+  # ─── Observability: Prometheus ─────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.50.1
+    container_name: omnicopilot-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - omnicopilot
+    profiles:
+      - observability
+
+  # ─── Observability: Grafana ────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.3.3
+    container_name: omnicopilot-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=omnicopilot
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+    networks:
+      - omnicopilot
+    profiles:
+      - observability
+
+  # ─── OpenTelemetry Collector ───────────────────────────────────────────────
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    container_name: omnicopilot-otel
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    volumes:
+      - ../deploy/otel-collector.yml:/etc/otelcol-contrib/config.yaml:ro
+    networks:
+      - omnicopilot
+    profiles:
+      - observability
+
+networks:
+  omnicopilot:
+    driver: bridge
+
+volumes:
+  qdrant_data:
+  prometheus_data:
+  grafana_data:

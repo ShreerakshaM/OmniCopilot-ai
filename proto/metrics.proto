@@ -1,0 +1,183 @@
+// Copyright 2024 OmniCopilot Authors
+// SPDX-License-Identifier: Apache-2.0
+//
+// Metrics and evaluation definitions.
+// Used for experiment tracking, evaluation, and reporting.
+
+syntax = "proto3";
+package omnicopilot;
+
+option cc_enable_arenas = true;
+
+import "google/protobuf/timestamp.proto";
+
+// Perception metrics for a single evaluation run
+message PerceptionMetrics {
+  double mean_average_precision = 1;      // mAP @ IoU thresholds
+  double precision = 2;
+  double recall = 3;
+  double f1_score = 4;
+
+  // Per-class breakdown
+  repeated PerClassMetrics per_class = 5;
+
+  // Distance-based breakdown
+  repeated DistanceBucketMetrics per_distance = 6;
+
+  // Occlusion-specific
+  double occluded_object_detection_rate = 7;
+  double occluded_object_mAP = 8;
+
+  // Localization
+  double mean_position_error_m = 9;
+  double mean_heading_error_rad = 10;
+  double mean_velocity_error_mps = 11;
+
+  // Tracking
+  double mota = 12;                       // Multi-Object Tracking Accuracy
+  double motp = 13;                       // Multi-Object Tracking Precision
+  uint32 id_switches = 14;
+  uint32 fragmentation = 15;
+}
+
+message PerClassMetrics {
+  string class_name = 1;
+  double ap = 2;                          // Average precision for this class
+  double precision = 3;
+  double recall = 4;
+  uint32 true_positives = 5;
+  uint32 false_positives = 6;
+  uint32 false_negatives = 7;
+}
+
+message DistanceBucketMetrics {
+  double min_distance_m = 1;
+  double max_distance_m = 2;
+  double ap = 3;
+  uint32 gt_count = 4;
+  uint32 detected_count = 5;
+}
+
+// Communication efficiency metrics
+message CommunicationMetrics {
+  double total_bandwidth_used_bps = 1;
+  double bandwidth_utilization = 2;       // fraction of budget used
+  double mean_message_size_bytes = 3;
+  double messages_per_second = 4;
+
+  double mean_information_value_transmitted = 5;
+  double mean_information_value_suppressed = 6;
+  double information_efficiency = 7;      // value delivered / bandwidth used
+
+  uint32 total_messages_sent = 8;
+  uint32 total_messages_suppressed = 9;
+  uint32 total_messages_dropped = 10;     // Network loss
+
+  double mean_latency_ms = 11;
+  double p95_latency_ms = 12;
+  double p99_latency_ms = 13;
+
+  // Receiver-awareness effectiveness
+  double redundant_message_rate = 14;     // Messages that didn't change receiver state
+  double novelty_hit_rate = 15;           // Fraction of messages that provided new info
+}
+
+// Safety metrics
+message SafetyMetrics {
+  double hazard_detection_rate = 1;
+  double mean_time_to_detection_s = 2;    // From hazard appearance to system awareness
+  double collision_rate = 3;
+  double near_miss_rate = 4;
+  double mean_time_to_collision_warning_s = 5;
+  uint32 false_alarms = 6;
+  uint32 missed_hazards = 7;
+  double safety_score = 8;                // Composite safety metric [0.0, 1.0]
+}
+
+// Robustness metrics (under degradation)
+message RobustnessMetrics {
+  // Degradation conditions
+  double packet_loss_rate = 1;
+  double latency_ms = 2;
+  uint32 failed_agents = 3;
+  uint32 adversarial_agents = 4;
+
+  // Performance under degradation
+  PerceptionMetrics perception = 5;
+  CommunicationMetrics communication = 6;
+  SafetyMetrics safety = 7;
+
+  // Graceful degradation score (1.0 = no degradation, 0.0 = complete failure)
+  double degradation_score = 8;
+}
+
+// Active acquisition metrics
+message AcquisitionMetrics {
+  uint32 requests_sent = 1;
+  uint32 requests_fulfilled = 2;
+  uint32 requests_timeout = 3;
+
+  double mean_information_gain = 4;       // Actual gain per fulfilled request
+  double mean_uncertainty_reduction = 5;
+  double mean_time_to_response_ms = 6;
+
+  // Effectiveness
+  double acquisition_success_rate = 7;    // Requests that improved world model
+  double detection_improvement_from_acquisition = 8;  // Δ mAP from active requests
+}
+
+// Trust/reliability metrics
+message TrustMetrics {
+  uint32 total_agents = 1;
+  uint32 adversarial_agents_present = 2;
+  uint32 adversarial_agents_detected = 3;
+  double mean_detection_time_s = 4;       // Time to identify adversarial agent
+  double false_accusation_rate = 5;       // Good agents wrongly flagged
+  double trust_calibration_error = 6;     // |assigned trust - actual accuracy|
+}
+
+// Full experiment evaluation result
+message ExperimentResult {
+  // Experiment metadata
+  string experiment_id = 1;
+  string experiment_name = 2;
+  string config_hash = 3;                 // Hash of Hydra config for reproducibility
+  google.protobuf.Timestamp started_at = 4;
+  google.protobuf.Timestamp completed_at = 5;
+
+  // Configuration summary
+  uint32 num_agents = 6;
+  uint32 num_scenarios = 7;
+  string dataset = 8;
+  string communication_policy = 9;        // "hand_designed", "learned", "none"
+  string network_profile = 10;            // "unlimited", "constrained_5mbps", "degraded"
+
+  // Results
+  PerceptionMetrics perception = 11;
+  CommunicationMetrics communication = 12;
+  SafetyMetrics safety = 13;
+  AcquisitionMetrics acquisition = 14;
+  TrustMetrics trust = 15;
+
+  // Robustness sweep (if applicable)
+  repeated RobustnessMetrics robustness_sweep = 16;
+
+  // Ablation info (if this is an ablation run)
+  string ablation_component_removed = 17; // Empty if not ablation
+}
+
+// Comparison between two experiment configurations
+message ExperimentComparison {
+  string baseline_experiment_id = 1;
+  string proposed_experiment_id = 2;
+
+  double delta_mAP = 3;
+  double delta_bandwidth = 4;
+  double delta_safety_score = 5;
+  double delta_latency_ms = 6;
+
+  // Statistical significance
+  double p_value_perception = 7;
+  double p_value_communication = 8;
+  bool statistically_significant = 9;     // p < 0.05
+}

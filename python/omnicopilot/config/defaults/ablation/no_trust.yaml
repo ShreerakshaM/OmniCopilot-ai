@@ -1,0 +1,8 @@
+# Ablation: remove agent trust modelling.
+# Weight all agents equally regardless of history.
+
+name: ablation_no_trust
+description: "Ablation — weight all agents equally, no reliability tracking."
+
+trust:
+  enabled: false

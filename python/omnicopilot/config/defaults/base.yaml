@@ -1,0 +1,61 @@
+# Base experiment configuration — all experiments inherit from this.
+# Override specific fields via experiment/, model/, communication/ configs.
+
+name: base
+seed: 42
+description: "Base configuration — override with specific experiment configs."
+
+# Scenario
+dataset: opv2v
+dataset_path: data/raw/opv2v
+split: test
+num_agents: 3
+duration_s: 30.0
+tick_rate_hz: 10.0
+
+# Perception
+perception:
+  model_name: pointpillars
+  checkpoint_path: data/models/pointpillars_opv2v.pth
+  confidence_threshold: 0.3
+  nms_threshold: 0.5
+  max_detections: 100
+
+# Fusion
+fusion:
+  algorithm: weighted_average
+  association_threshold_m: 3.0
+  trust_weight: 0.5
+  conflict_threshold: 0.6
+
+# Communication
+communication:
+  policy: hand_designed
+  bandwidth_bps: 6.0e+6
+  latency_ms: 20.0
+  packet_loss_rate: 0.05
+  budget_bytes_per_tick: 4096
+  safety_weight: 0.35
+  novelty_weight: 0.20
+  confidence_weight: 0.15
+  time_sensitivity_weight: 0.15
+  receiver_benefit_weight: 0.15
+
+# Active Acquisition
+active_acquisition:
+  enabled: true
+  max_requests_per_tick: 3
+  request_timeout_s: 1.0
+  min_value_threshold: 0.2
+
+# Trust
+trust:
+  enabled: true
+  initial_trust: 0.7
+  ema_alpha: 0.05
+  min_trust: 0.05
+
+# Output
+output_dir: data/results
+wandb_project: omnicopilot
+wandb_enabled: true
