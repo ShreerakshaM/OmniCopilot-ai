@@ -1,0 +1,94 @@
+# Copyright 2024 OmniCopilot Authors
+# SPDX-License-Identifier: Apache-2.0
+
+name: C++ CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'cpp/**'
+      - 'proto/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/ci-cpp.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'cpp/**'
+      - 'proto/**'
+      - 'CMakeLists.txt'
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        compiler: [gcc-13, clang-17]
+        build_type: [Release, Debug]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            protobuf-compiler \
+            libprotobuf-dev \
+            ${{ matrix.compiler == 'clang-17' && 'clang-17 libc++-17-dev' || 'g++-13' }}
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.compiler == 'clang-17' && 'clang++-17' || 'g++-13' }} \
+            -DOMNICOPILOT_BUILD_TESTS=ON \
+            -DOMNICOPILOT_BUILD_BINDINGS=OFF \
+            -DOMNICOPILOT_ENABLE_SANITIZERS=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }}
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Run tests
+        run: |
+          cd build
+          ctest --output-on-failure --parallel $(nproc)
+
+  static-analysis:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            protobuf-compiler \
+            libprotobuf-dev \
+            clang-17 \
+            clang-tidy-17 \
+            clang-format-17
+
+      - name: Configure CMake with clang-tidy
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER=clang++-17 \
+            -DOMNICOPILOT_BUILD_TESTS=OFF \
+            -DOMNICOPILOT_BUILD_BINDINGS=OFF \
+            -DOMNICOPILOT_ENABLE_CLANG_TIDY=ON
+
+      - name: Build (runs clang-tidy)
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Check formatting
+        run: |
+          find cpp/ -name '*.h' -o -name '*.cc' | \
+            xargs clang-format-17 --style=file --dry-run --Werror
