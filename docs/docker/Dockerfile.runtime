@@ -1,0 +1,91 @@
+# Copyright 2024 OmniCopilot Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Runtime image: C++ core + Python bindings + Python research layer
+# Multi-stage build for minimal final image.
+
+# ─── Stage 1: C++ Build ──────────────────────────────────────────────────────
+FROM ubuntu:24.04 AS cpp-builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    ninja-build \
+    g++-13 \
+    protobuf-compiler \
+    libprotobuf-dev \
+    python3-dev \
+    python3-pip \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pybind11
+RUN pip3 install --break-system-packages pybind11[global]
+
+WORKDIR /build
+
+# Copy only what's needed for C++ build
+COPY CMakeLists.txt ./
+COPY cmake/ cmake/
+COPY cpp/ cpp/
+COPY proto/ proto/
+
+# Build C++ with bindings
+RUN cmake -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_CXX_COMPILER=g++-13 \
+    -DOMNICOPILOT_BUILD_TESTS=OFF \
+    -DOMNICOPILOT_BUILD_BINDINGS=ON \
+    && cmake --build build --parallel $(nproc)
+
+# ─── Stage 2: Python Environment ─────────────────────────────────────────────
+FROM ubuntu:24.04 AS python-env
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-venv \
+    python3-pip \
+    libprotobuf-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.cargo/bin:$PATH"
+
+WORKDIR /app
+
+# Copy Python project files
+COPY pyproject.toml ./
+COPY python/ python/
+
+# Install Python dependencies (without ML extras for lighter runtime)
+RUN uv venv .venv && \
+    . .venv/bin/activate && \
+    uv pip install -e ".[dev]"
+
+# Copy C++ compiled bindings from builder stage
+COPY --from=cpp-builder /build/build/cpp/_omnicopilot_cpp*.so python/omnicopilot/
+
+# Copy remaining project files
+COPY proto/ proto/
+COPY configs/ configs/ 2>/dev/null || true
+COPY scripts/ scripts/
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV VIRTUAL_ENV="/app/.venv"
+
+# Generate Python protobuf files
+RUN python3 -m grpc_tools.protoc \
+    --proto_path=proto \
+    --python_out=python/omnicopilot \
+    --pyi_out=python/omnicopilot \
+    proto/*.proto || true
+
+ENTRYPOINT ["python3", "-m", "omnicopilot"]
