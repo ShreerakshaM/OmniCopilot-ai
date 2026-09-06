@@ -5,6 +5,21 @@
 
 namespace omnicopilot {
 
-// TODO: Implement — this is a scaffold stub.
+struct SourceSelector::Impl {
+  SourceSelectionConfig config;
+};
+
+SourceSelector::SourceSelector(SourceSelectionConfig config)
+    : impl_(std::make_unique<Impl>()) {
+  impl_->config = std::move(config);
+}
+
+SourceSelector::~SourceSelector() = default;
+
+std::vector<std::string> SourceSelector::Select(
+    const std::vector<InfoValueEstimate>& estimates) const {
+  // TODO: Implement source selection.
+  return {};
+}
 
 }  // namespace omnicopilot

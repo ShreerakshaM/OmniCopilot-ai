@@ -17,6 +17,9 @@ struct UncertaintyConfig {
   /// Minimum confidence (never decay below this).
   double min_confidence = 0.01;
 
+  /// Confidence threshold below which an entity is considered stale.
+  double stale_threshold = 0.15;
+
   /// Boost factor when multiple independent sources agree.
   double corroboration_boost = 0.15;
 

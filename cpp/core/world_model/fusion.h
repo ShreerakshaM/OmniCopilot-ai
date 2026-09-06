@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <memory>
 #include <vector>
 
 #include "cpp/core/world_model/entity.h"
