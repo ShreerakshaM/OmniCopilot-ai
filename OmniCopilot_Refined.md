@@ -487,25 +487,32 @@ Then add:
 
 ---
 
-## Global Positioning
+## Technical Summary (per domain framing)
 
-### For AI/ML roles (anywhere)
-> Built a multi-agent cooperative perception system with uncertainty-aware fusion, active information acquisition, and information-theoretic communication under resource constraints.
+The same system, described through the lens of different technical domains:
 
-### For GenAI / Agentic AI roles
-> Designed a multi-agent reasoning system combining world modelling, LLM-based investigation, RAG-augmented knowledge retrieval, and tool-using agents for complex situation analysis.
+**Multi-agent ML / perception:** A multi-agent cooperative perception system with
+uncertainty-aware fusion, active information acquisition, and information-theoretic
+communication under resource constraints.
 
-### For Robotics roles
-> Developed a distributed perception platform where agents with partial observability cooperatively build a shared world model through intelligent, bandwidth-aware information exchange.
+**GenAI / agentic reasoning:** A multi-agent reasoning layer combining world modelling,
+LLM-based investigation, RAG-augmented knowledge retrieval, and tool-using agents for
+complex situation analysis (non-real-time layer only).
 
-### For Autonomous Driving roles
-> Implemented cooperative V2X perception with AI-driven message prioritization, receiver-aware communication, and uncertainty-weighted multi-vehicle sensor fusion.
+**Robotics:** A distributed perception platform where agents with partial observability
+cooperatively build a shared world model through intelligent, bandwidth-aware information
+exchange.
 
-### For Distributed Systems / Edge AI roles
-> Built a distributed intelligence system with communication-aware inference, active information acquisition, graceful degradation under network constraints, and adaptive agent reliability estimation.
+**Autonomous driving:** Cooperative V2X perception with AI-driven message prioritization,
+receiver-aware communication, and uncertainty-weighted multi-vehicle sensor fusion.
 
-### For Telecom / Network AI roles
-> Developed AI-native communication policies that maximize information value under bandwidth and latency constraints in a multi-agent cooperative system.
+**Distributed systems / edge AI:** A distributed intelligence system with
+communication-aware inference, active information acquisition, graceful degradation under
+network constraints, and adaptive agent reliability estimation.
+
+**Networking / V2X:** Communication policies that maximize information value under
+bandwidth, latency, and contention constraints in a multi-agent cooperative system,
+evaluated under realistic C-V2X channel mechanics.
 
 ---
 
@@ -524,31 +531,37 @@ Every feature must strengthen:
 
 ---
 
-## Interview Pitch
+## One-Paragraph Description
 
-### 30 seconds
-> "We built OmniCopilot — a multi-agent AI system where distributed agents cooperatively perceive their environment through intelligent, bandwidth-aware communication. Each agent has partial observations with uncertainty. The system decides what information is most valuable to share, actively requests missing information from other agents, and fuses everything into a shared world model. We demonstrate it on cooperative autonomous driving, but the architecture applies to any distributed multi-agent problem — robotics, drones, edge AI. Our key result is that intelligent communication achieves better perception than naive broadcasting while using significantly less bandwidth."
+> OmniCopilot is a multi-agent AI system where distributed agents cooperatively perceive
+> their environment through intelligent, bandwidth-aware communication. Each agent has
+> partial observations with uncertainty. The system decides what information is most
+> valuable to share, actively requests missing information from other agents, and fuses
+> everything into a shared world model. It is demonstrated on cooperative autonomous
+> driving, but the architecture applies to any distributed multi-agent problem — robotics,
+> drones, edge AI. The central result target: intelligent communication achieves better
+> perception than naive broadcasting while using significantly less bandwidth, and this
+> advantage is evaluated under realistic V2X network constraints.
 
-### Follow-up depth
-- "How does the communication policy work?" → Information value scoring, receiver-awareness, network adaptation
-- "What AI techniques did you use?" → Cooperative perception models, uncertainty estimation, RL for communication policies, LLM reasoning for complex scenarios, RAG for knowledge
-- "How is this different from existing work?" → Most cooperative perception assumes unlimited communication. We make communication itself an AI decision. Plus active acquisition — the system asks for what it needs.
-- "Does it generalize?" → The core is domain-agnostic. We swap the sensor layer and domain adapter. The intelligence loop is the same.
+### Key technical points (for documentation / write-up)
+- **Communication policy:** information-value scoring, receiver-awareness, network adaptation.
+- **AI techniques:** cooperative perception models, uncertainty estimation, RL for
+  communication policies, LLM reasoning for complex scenarios (non-real-time), RAG for knowledge.
+- **Distinction from prior work:** most cooperative perception assumes idealized/unlimited
+  communication and optimizes feature compression; this project treats communication itself
+  as a learned decision under realistic constraints, and adds active acquisition — the
+  system requests what it needs.
+- **Generalization:** the core is domain-agnostic; swapping the sensor layer and domain
+  adapter reuses the same intelligence loop.
 
 ---
 
-## Project Name Decision
+## Project Name
 
-**OmniCopilot** works because:
-- "Omni" suggests multi-source, multi-modal, omniscient aspiration
-- "Copilot" suggests AI assistance and cooperation
-- It doesn't lock you into "vehicle" or "V2X" in the name
-- It's memorable
+**OmniCopilot** — "Omni" suggests multi-source/multi-modal; "Copilot" suggests
+cooperation and assistance; the name does not lock the project to "vehicle" or "V2X."
 
-Subtitle options depending on audience:
-- *Cooperative Multimodal AI Under Communication Constraints* (academic/research)
-- *Multi-Agent Distributed Intelligence Platform* (industry/global)
-- *Cooperative Perception for Connected Autonomous Systems* (automotive)
+Subtitle: *Cooperative Multimodal AI Under Communication Constraints.*
 
 ---
 
@@ -578,9 +591,9 @@ This connects to:
 - **Theory of Mind** — modelling what other agents know and need
 - **Dec-POMDP** — decentralized decision-making under partial observability
 
-### Why this framing matters for positioning
+### Why this framing matters
 
-When an interviewer asks "what's novel about your project?" the answer is:
+The precise articulation of the contribution is:
 
 > "Most cooperative perception treats communication as a compression problem. We treat it as a decision problem — each agent maintains a belief model of other agents and communicates only when the expected information gain exceeds the cost. We learn this policy end-to-end and discover that it develops strategies no hand-designed system would produce."
 
@@ -666,7 +679,7 @@ The policy learns to save bandwidth during calm periods so it has budget availab
 
 ### Why this is powerful
 
-In an interview:
+The significance, stated plainly:
 
 > "We trained a communication policy and discovered that it develops strategies we didn't anticipate. For example, it learned to stay silent during routine driving and hoard bandwidth for sudden events — something our hand-designed system couldn't do because it evaluates each moment independently."
 
@@ -828,7 +841,7 @@ After processing many scenarios at a particular intersection:
 
 ### Why this matters
 
-In an interview:
+The significance, stated plainly:
 
 > "The system doesn't just work — it gets better. We show that after N episodes, communication efficiency improves by X%, trust calibration accuracy reaches Y%, and the system develops location-specific priors that reduce hazard detection time by Z%."
 
@@ -838,37 +851,44 @@ This demonstrates genuine machine learning — not just "we trained a model once
 
 ## Complete Timeline (MVP → Full System)
 
-| Weeks | Phase | Milestone | Score |
+| Weeks | Phase | Milestone | Maturity |
 |---|---|---|---|
-| 1-2 | Setup | Environment running (OPV2V loaded OR CARLA multi-vehicle) | — |
-| 3-4 | Baseline | Single-agent detection measured, baseline numbers established | — |
-| 5-8 | Core | Basic cooperative fusion working. First result: "cooperation helps" | **8/10** |
-| 9-10 | Communication | Hand-designed prioritization under bandwidth constraints | 8/10 |
-| 11-14 | Learning | RL-learned communication policy trained and compared | **9/10** |
-| 15-16 | Active | Active information acquisition module working | 9/10 |
-| 17-18 | Robustness | Adversarial agent experiments + trust module | 9/10 |
-| 19-20 | Science | Full ablation study across all components | 9/10 |
-| 21-22 | Discovery | Emergent strategy analysis from learned policy | **9.5/10** |
-| 23-24 | Self-improvement | Demonstrate learning curves, contextual adaptation | **10/10** |
-| 25-26 | Polish | Demo video, write-up, visualizations, open-source release | 10/10 |
+| 1-2 | Setup | Environment running (OPV2V loaded OR CARLA multi-vehicle) | Foundation |
+| 3-4 | Baseline | Single-agent detection measured, baseline numbers established | Foundation |
+| 5-8 | Core | Basic cooperative fusion working. First result: "cooperation helps" | **Core result** |
+| 9-10 | Communication | Hand-designed prioritization under bandwidth constraints | Core result |
+| 11-14 | Learning | RL-learned communication policy trained and compared | **Learned policy** |
+| 15-16 | Active | Active information acquisition module working | Strong |
+| 17-18 | Robustness | Adversarial agent experiments + trust module | Strong |
+| 19-20 | Science | Full ablation study across all components | Rigorous |
+| 21-22 | Discovery | Emergent strategy analysis from learned policy | **Novel finding** |
+| 23-24 | Self-improvement | Demonstrate learning curves, contextual adaptation | Advanced |
+| 25-26 | Polish | Demo video, write-up, visualizations, open-source release | Complete |
 
-**Key insight:** The 8/10 version ships at week 10. Everything after is upgrades. You're never in a position where you have nothing to show.
+**Key insight:** The core result ships at week 10. Everything after is additive. There is
+never a point where the project has nothing demonstrable — each milestone stands on its own.
 
 ---
 
-## The Story at Each Level
+## Deliverable at Each Milestone
 
-### Week 10 (8/10)
-> "We built a cooperative perception system. Cooperation improves detection by X%. Intelligent communication achieves same accuracy at Y% less bandwidth."
+### Week 10 — Core result
+> A cooperative perception system. Cooperation improves detection by X%. Intelligent
+> communication achieves the same accuracy at Y% less bandwidth.
 
-### Week 16 (9/10)
-> "We learned a communication policy that outperforms hand-designed rules. It discovers non-obvious strategies like selective silence and proactive alerting."
+### Week 16 — Learned policy
+> A learned communication policy that outperforms hand-designed rules and discovers
+> non-obvious strategies like selective silence and proactive alerting.
 
-### Week 22 (9.5/10)
-> "Full ablation study shows that active acquisition is the biggest contributor. The learned policy only outperforms in dynamic conditions. Adversarial resilience works up to 40% compromised agents."
+### Week 22 — Rigorous + novel finding
+> Full ablation study identifying the biggest contributor; characterization of when the
+> learned policy wins; adversarial resilience quantified up to N compromised agents.
 
-### Week 26 (10/10)
-> "The system improves over time — communication efficiency increases, trust calibration sharpens, spatial priors emerge. We formulated cooperative communication as active inference and showed that learned policies develop emergent strategies that hand-engineered systems cannot replicate."
+### Week 26 — Complete
+> The system improves over time (communication efficiency, trust calibration, spatial
+> priors). Cooperative communication formulated as active inference; learned policies
+> shown to develop emergent strategies hand-engineered systems cannot replicate. Evaluated
+> under realistic V2X constraints.
 
 ---
 
@@ -876,11 +896,11 @@ This demonstrates genuine machine learning — not just "we trained a model once
 
 | Problem in OmniWorld | Problem in OmniCopilot 2.0 | Fixed here |
 |---|---|---|
-| Too abstract, no concrete demo | Too Gothenburg/automotive-specific | AI-first framing, automotive as demonstration domain |
+| Too abstract, no concrete demo | Too automotive-specific | AI-first framing, automotive as demonstration domain |
 | 50 sections of architecture | Clearer but still V2X-locked title/framing | Domain-agnostic core with thin adapters |
-| No clear single result to show | Clear demo but narrow positioning | Global positioning table for any role |
+| No clear single result to show | Clear demo but narrow framing | Domain-agnostic technical summary |
 | OmniForge distraction | Less distraction but optional modules creep | Stripped to essentials, clear MVP |
-| Messy scope | Better scope but still long | Prioritized timeline with 6-8 week MVP |
+| Messy scope | Better scope but still long | Prioritized timeline with 6-8 week core |
 | No novelty claim | Novelty unclear | "Communication as active inference" — clear contribution |
 | No learning story | Static system | Self-improving system with learning curves |
 | No scientific rigor | No ablations | Full ablation study proving each component's value |
