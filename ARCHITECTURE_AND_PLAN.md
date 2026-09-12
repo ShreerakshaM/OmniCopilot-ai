@@ -673,9 +673,10 @@ The sharpest single-sentence framing to aim for:
 After reading V2VNet, OPV2V, DiscoNet, V2X-ViT, CoBEVT, and Where2comm (see
 `docs/prior_art.md`), the following plan corrections apply. These override earlier framing.
 
-**C1 — Two-track fusion (accuracy vs. reasoning).** All six SOTA papers fuse at the
-FEATURE level (share neural feature maps); OPV2V's own numbers show late/object-level
-fusion is weaker (AP@0.7 0.78 vs. 0.82 for intermediate). Therefore:
+**C1 — Two-track fusion (accuracy vs. reasoning) + USE OPENCOOD FOR DATA LOADING.**
+All six SOTA papers fuse at the FEATURE level (share neural feature maps); OPV2V's own
+numbers show late/object-level fusion is weaker (AP@0.7 0.78 vs. 0.82 for intermediate).
+Therefore:
 - Do NOT try to win raw detection mAP with our object-level `FusionEngine`.
 - **Adopt a feature-fusion backbone from OpenCOOD** (e.g. AttFuse/V2VNet/Where2comm) as
   the perception+detection layer (Phase 2-3).
@@ -683,6 +684,34 @@ fusion is weaker (AP@0.7 0.78 vs. 0.82 for intermediate). Therefore:
   LLM layer LAYERED ON TOP — its value is interpretability, trust, adversarial resilience,
   realistic-comms evaluation, and reasoning, NOT raw mAP. Evaluate our contributions on
   THOSE axes, not on beating Where2comm's detection accuracy.
+
+**C1b — FIRM DECISION: use OpenCOOD's data loading + coordinate transforms; do NOT
+hand-roll them.** Verified empirically: hand-rolling the OPV2V coordinate transform
+produced a 70m error (see below). OPV2V ground-truth `location` is in the CARLA GLOBAL
+frame, and cross-agent projection MUST use OpenCOOD's convention:
+```
+# opencood/utils/transformation_utils.py
+x_to_world(pose)        # [x,y,z,roll,yaw,pitch] (DEGREES) -> 4x4 local->world
+x1_to_x2(x1, x2):       # transform agent x1's frame -> agent x2's frame
+    return inv(x_to_world(x2)) @ x_to_world(x1)
+```
+Key facts learned from the real data + OpenCOOD:
+- GT `location` is GLOBAL (CARLA map) coords, NOT ego frame. Our earlier assumption was
+  wrong; multiplying by pose again double-transformed → the 70m error.
+- Cross-agent transform ALWAYS inverts the destination pose: `inv(x2_to_world) @ x1_to_world`.
+  We never inverted → part of the error.
+- Angles are in DEGREES (OpenCOOD calls `np.radians` internally).
+- `extent` is HALF-dimensions (double for full L/W/H).
+- Object dict keys are per-agent; `ass_id` (often -1) would be the cross-agent identity —
+  do NOT assume matching dict keys mean the same physical car.
+- YAML uses embedded numpy objects → must use `yaml.unsafe_load`, not `safe_load`.
+
+**Action:** Task 1.3's `opv2v.py` becomes a THIN WRAPPER around OpenCOOD's `BaseDataset` +
+`opencood.utils.transformation_utils`, NOT a from-scratch parser. Reuse their
+`x_to_world` / `x1_to_x2` for ALL coordinate math. This eliminates the coordinate-bug
+class entirely and is the concrete realization of correction C1. Task 3.0 (coordinate
+transforms) correspondingly shrinks to "adopt and wrap OpenCOOD's transforms," not
+"implement transforms."
 
 **C2 — Shared BEV coordinate frame.** Where2comm avoids per-observation coordinate
 transforms by projecting all agents into a common BEV/global frame up front. Adopt the
