@@ -67,6 +67,8 @@ void BindWorldModel(py::module_& m) {
       .def_readwrite("velocity", &TrackedEntity::velocity)
       .def_readwrite("confidence", &TrackedEntity::confidence)
       .def_readwrite("state", &TrackedEntity::state)
+      .def_readwrite("unique_source_count", &TrackedEntity::unique_source_count)
+      .def_readwrite("observation_count", &TrackedEntity::observation_count)
       .def_readwrite("is_safety_critical", &TrackedEntity::is_safety_critical)
       .def_readwrite("needs_corroboration", &TrackedEntity::needs_corroboration);
 
@@ -77,16 +79,35 @@ void BindWorldModel(py::module_& m) {
       .def_readwrite("stale_confidence_threshold", &WorldModelConfig::stale_confidence_threshold)
       .def_readwrite("stale_timeout_s", &WorldModelConfig::stale_timeout_s);
 
+  // WorldModelStats
+  py::class_<WorldModelStats>(m, "WorldModelStats")
+      .def(py::init<>())
+      .def_readonly("total_entities", &WorldModelStats::total_entities)
+      .def_readonly("confirmed", &WorldModelStats::confirmed)
+      .def_readonly("tentative", &WorldModelStats::tentative)
+      .def_readonly("predicted", &WorldModelStats::predicted)
+      .def_readonly("stale", &WorldModelStats::stale)
+      .def_readonly("mean_confidence", &WorldModelStats::mean_confidence)
+      .def_readonly("tick", &WorldModelStats::tick);
+
   // WorldModel
   py::class_<WorldModel>(m, "WorldModel")
       .def(py::init<WorldModelConfig>())
       .def("tick", &WorldModel::Tick)
       .def("ingest_observations", &WorldModel::IngestObservations,
            py::arg("observations"), py::arg("agent_trust") = 1.0)
-      .def("query_radius", &WorldModel::QueryRadius)
-      .def("get_entity", &WorldModel::GetEntity, py::return_value_policy::reference)
-      .def("get_entities", &WorldModel::GetEntities)
-      .def("get_uncertain_entities", &WorldModel::GetUncertainEntities)
+      // Query methods return pointers INTO the world model's internal storage.
+      // Use reference_internal so pybind11 does NOT take ownership / free them,
+      // and keeps the parent WorldModel alive while the returned objects exist.
+      .def("query_radius", &WorldModel::QueryRadius,
+           py::return_value_policy::reference_internal)
+      .def("get_entity", &WorldModel::GetEntity,
+           py::return_value_policy::reference_internal)
+      .def("get_entities", &WorldModel::GetEntities,
+           py::arg("min_confidence") = 0.0, py::arg("object_class") = -1,
+           py::return_value_policy::reference_internal)
+      .def("get_uncertain_entities", &WorldModel::GetUncertainEntities,
+           py::return_value_policy::reference_internal)
       .def("get_stats", &WorldModel::GetStats)
       .def("reset", &WorldModel::Reset);
 }
