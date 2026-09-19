@@ -21,6 +21,11 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
 endif()
 
+# Position-independent code everywhere. Required so the static core/sim libraries
+# can be linked into the pybind11 shared module (Python extension). Harmless for
+# the test executable.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # Options
 option(OMNICOPILOT_BUILD_TESTS "Build unit tests" ON)
 option(OMNICOPILOT_BUILD_BINDINGS "Build Python bindings (pybind11)" ON)
