@@ -87,6 +87,10 @@ def fuse_frame(oc: Any, frames: dict, radius: float, agent_trust: float) -> tupl
     wm = oc.WorldModel(cfg)
 
     best_single = 0
+    # Use a single, consistent step time for all observations in this frame, so the
+    # lifecycle sees one clean simulation step (like the demo). Decoupled from the raw
+    # dataset timestamp to avoid a huge decay dt that could suppress confirmation.
+    step_t = 1.0
     for aid, frame in frames.items():
         world = frame.gt_locations_world()
         best_single = max(best_single, len(frame.gt_objects))
@@ -99,10 +103,14 @@ def fuse_frame(oc: Any, frames: dict, radius: float, agent_trust: float) -> tupl
             obs.position.y = float(wpos[1])
             obs.position.z = float(wpos[2])
             obs.confidence = 0.9
-            obs.timestamp_s = frame.timestamp_s
+            obs.timestamp_s = step_t
             wm.ingest_observations([obs], agent_trust)
 
-    wm.tick(0.0)
+    # Advance by a positive dt so the lifecycle update runs. WorldModel::Tick
+    # early-returns if dt <= 0, which skips the Tentative->Confirmed transition
+    # entirely (the bug that produced ~0 confirmed in the first sweep). Tick to a
+    # time just past the observation time: one clean step, minimal decay.
+    wm.tick(step_t + 0.1)
     stats = wm.get_stats()
     return stats.total_entities, stats.confirmed, best_single
 
