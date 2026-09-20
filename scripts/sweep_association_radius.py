@@ -115,6 +115,51 @@ def fuse_frame(oc: Any, frames: dict, radius: float, agent_trust: float) -> tupl
     return stats.total_entities, stats.confirmed, best_single
 
 
+def debug_one_frame(oc: Any, ds: Any, sid: str, fi: int, radius: float) -> None:
+    """Dump diagnostics for a single real frame to explain association behavior.
+
+    Prints, for the same physical objects seen by multiple agents, the cross-agent
+    world-frame nearest-neighbor distances (via the loader's OWN matcher), and the
+    C++ entity/confirmed counts. This tells us empirically whether objects land close
+    enough to associate, or whether association/greedy assignment is the problem —
+    rather than guessing.
+    """
+    import numpy as np  # noqa: PLC0415
+    from omnicopilot.data.opv2v import OPV2VDataset  # noqa: PLC0415
+
+    frames = ds.get_all_agent_frames(sid, fi, load_lidar=False)
+    per_agent = {aid: len(f.gt_objects) for aid, f in frames.items()}
+    print(f"\n[DEBUG] scenario={sid} frame={fi} agents={list(frames)}")
+    print(f"[DEBUG] per-agent object counts: {per_agent}")
+
+    # 1) Ground-truth cross-agent matches via the loader's proximity matcher.
+    for tol in (2.0, 3.0, 5.0):
+        groups = OPV2VDataset.match_objects_across_agents(frames, tolerance_m=tol)
+        multi = [g for g in groups if len(g) >= 2]
+        print(f"[DEBUG] loader matcher tol={tol}m: {len(groups)} distinct objects, "
+              f"{len(multi)} seen by >=2 agents")
+
+    # 2) Feed through C++ exactly as the sweep does, report entities/confirmed.
+    e, c, b = fuse_frame(oc, frames, radius, 0.9)
+    print(f"[DEBUG] C++ fuse @ radius={radius}m: entities={e} confirmed={c} best_single={b}")
+
+    # 3) Raw world-position spread: for the first agent's first few objects, show the
+    #    nearest object in every OTHER agent (the distance association must beat).
+    agents = list(frames)
+    if len(agents) >= 2:
+        a0 = agents[0]
+        w0 = frames[a0].gt_locations_world()
+        others = {aid: frames[aid].gt_locations_world() for aid in agents[1:]}
+        print(f"[DEBUG] nearest cross-agent neighbor for first 5 objects of {a0}:")
+        for i in range(min(5, len(w0))):
+            dists = []
+            for aid, w in others.items():
+                if len(w):
+                    d = float(np.min(np.linalg.norm(w - w0[i], axis=1)))
+                    dists.append(f"{aid}:{d:.2f}m")
+            print(f"    obj{i} @ ({w0[i][0]:.1f},{w0[i][1]:.1f}) -> {', '.join(dists)}")
+
+
 def run_sweep(
     oc: Any,
     data_root: Path,
@@ -187,9 +232,30 @@ def main() -> None:
     parser.add_argument("--agent-trust", type=float, default=0.9)
     parser.add_argument("--out", type=Path, default=None,
                         help="Optional JSON output path for the sweep table")
+    parser.add_argument("--debug-frame", action="store_true",
+                        help="Dump diagnostics for ONE real frame (why association "
+                             "behaves as it does) instead of running the full sweep")
     args = parser.parse_args()
 
     oc = import_cpp_module(args.module_dir)
+
+    if args.debug_frame:
+        from omnicopilot.data.opv2v import OPV2VDataset  # noqa: PLC0415
+        ds = OPV2VDataset(args.data_root)
+        ds.load()
+        # Pick the first scenario with >= min_agents agents.
+        target = None
+        for sid in ds.scenario_ids():
+            sc = ds.get_scenario(sid)
+            if len(sc.agent_ids) >= args.min_agents:
+                target = (sid, sc.frame_indices[0])
+                break
+        if target is None:
+            print(f"No scenario with >= {args.min_agents} agents found.")
+            return
+        debug_one_frame(oc, ds, target[0], target[1], radius=5.0)
+        return
+
     summary = run_sweep(
         oc, args.data_root, args.radii, args.frame_stride, args.min_agents, args.agent_trust
     )
