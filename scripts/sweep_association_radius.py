@@ -1,0 +1,199 @@
+"""Sweep the fusion association radius against real OPV2V data.
+
+Feeds real ground-truth objects (world frame) through the C++ WorldModel at a
+range of ``association_max_distance_m`` values and reports how the fused entity
+count and confirmed count change. The goal is to pick the radius that best
+reproduces the true distinct-object count without over-merging distinct vehicles
+or under-merging the same vehicle seen by several agents.
+
+Interpretation of the output curve:
+- Too small  -> the SAME car seen by N agents (with ~1-2 m pose noise) splits into
+  several near-duplicate entities: entity count inflated, ``confirmed`` collapses.
+- Too large  -> genuinely DISTINCT nearby cars merge into one entity: entity count
+  deflated below the true object count.
+- The knee (flat region) is the defensible radius.
+
+Prerequisites:
+- Built pybind11 module ``_omnicopilot_cpp`` with the FusionConfig binding
+  (needs the "Wire FusionConfig through WorldModel" change; rebuild after pulling).
+- OPV2V data available.
+
+Usage:
+    python scripts/sweep_association_radius.py \
+        --data-root /kaggle/input/.../opv2v-2/test \
+        --module-dir /kaggle/working/OmniCopilot-ai/build/cpp \
+        --frame-stride 20 --min-agents 3
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+# ── Self-locating bootstrap: make `omnicopilot` importable no matter how invoked ──
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_PY_ROOT = _REPO_ROOT / "python"
+if _PY_ROOT.is_dir() and str(_PY_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PY_ROOT))
+
+
+DEFAULT_RADII = [1.5, 2.0, 2.5, 3.0, 4.0, 5.0]
+
+
+def import_cpp_module(module_dir: str | None) -> Any:
+    """Import the compiled C++ pybind11 module."""
+    if module_dir:
+        sys.path.insert(0, module_dir)
+    try:
+        import _omnicopilot_cpp as oc  # noqa: PLC0415
+    except ImportError as e:
+        msg = (
+            "Could not import _omnicopilot_cpp. Build it first:\n"
+            "  cmake -B build -DOMNICOPILOT_BUILD_BINDINGS=ON\n"
+            "  cmake --build build\n"
+            "then pass --module-dir <repo>/build/cpp"
+        )
+        raise ImportError(msg) from e
+    # Fail loudly if the module predates the FusionConfig binding.
+    if not hasattr(oc, "FusionConfig"):
+        msg = (
+            "The built module has no FusionConfig binding. Rebuild after pulling the "
+            "'Wire FusionConfig through WorldModel' change:\n"
+            "  cmake --build build -j"
+        )
+        raise RuntimeError(msg)
+    return oc
+
+
+def _obj_class(oc: Any, obj_type: str) -> Any:
+    t = obj_type.lower()
+    if "ped" in t:
+        return oc.ObjectClass.PEDESTRIAN
+    if "cycl" in t:
+        return oc.ObjectClass.CYCLIST
+    if "truck" in t:
+        return oc.ObjectClass.TRUCK
+    return oc.ObjectClass.VEHICLE
+
+
+def fuse_frame(oc: Any, frames: dict, radius: float, agent_trust: float) -> tuple[int, int, int]:
+    """Fuse one frame (all agents) at a given radius. Returns (entities, confirmed, best_single)."""
+    cfg = oc.WorldModelConfig()
+    cfg.max_entities = 2000
+    cfg.fusion.association_max_distance_m = radius
+    wm = oc.WorldModel(cfg)
+
+    best_single = 0
+    for aid, frame in frames.items():
+        world = frame.gt_locations_world()
+        best_single = max(best_single, len(frame.gt_objects))
+        for i, (obj, wpos) in enumerate(zip(frame.gt_objects, world)):
+            obs = oc.Observation()
+            obs.observation_id = f"{aid}_{i}"
+            obs.agent_id = aid
+            obs.object_class = _obj_class(oc, obj.obj_type)
+            obs.position.x = float(wpos[0])
+            obs.position.y = float(wpos[1])
+            obs.position.z = float(wpos[2])
+            obs.confidence = 0.9
+            obs.timestamp_s = frame.timestamp_s
+            wm.ingest_observations([obs], agent_trust)
+
+    wm.tick(0.0)
+    stats = wm.get_stats()
+    return stats.total_entities, stats.confirmed, best_single
+
+
+def run_sweep(
+    oc: Any,
+    data_root: Path,
+    radii: list[float],
+    frame_stride: int,
+    min_agents: int,
+    agent_trust: float,
+) -> dict:
+    """Run the radius sweep across sampled frames."""
+    from omnicopilot.data.opv2v import OPV2VDataset  # noqa: PLC0415
+
+    ds = OPV2VDataset(data_root)
+    ds.load()
+    if not ds.scenario_ids():
+        msg = f"No scenarios under {data_root}"
+        raise RuntimeError(msg)
+
+    # Collect a stable sample of multi-agent frames once, reuse for every radius.
+    sampled: list[tuple[str, int]] = []
+    for sid in ds.scenario_ids():
+        sc = ds.get_scenario(sid)
+        if len(sc.agent_ids) < min_agents:
+            continue
+        for fi in sc.frame_indices[::frame_stride]:
+            sampled.append((sid, fi))
+
+    if not sampled:
+        msg = f"No frames with >= {min_agents} agents found."
+        raise RuntimeError(msg)
+
+    print(f"Sampled {len(sampled)} frames (>= {min_agents} agents, stride {frame_stride}).")
+
+    results = []
+    for radius in radii:
+        tot_entities = tot_confirmed = tot_best = n = 0
+        for sid, fi in sampled:
+            frames = ds.get_all_agent_frames(sid, fi, load_lidar=False)
+            e, c, b = fuse_frame(oc, frames, radius, agent_trust)
+            tot_entities += e
+            tot_confirmed += c
+            tot_best += b
+            n += 1
+        gain = (tot_entities / tot_best) if tot_best else 0.0
+        row = {
+            "radius_m": radius,
+            "mean_entities": round(tot_entities / n, 2),
+            "mean_confirmed": round(tot_confirmed / n, 2),
+            "mean_best_single": round(tot_best / n, 2),
+            "gain_vs_best_single": round(gain, 3),
+        }
+        results.append(row)
+        print(
+            f"radius={radius:>4.1f}m  mean_entities={row['mean_entities']:>7}  "
+            f"mean_confirmed={row['mean_confirmed']:>7}  gain={row['gain_vs_best_single']}x"
+        )
+
+    return {"num_frames": len(sampled), "min_agents": min_agents, "sweep": results}
+
+
+def main() -> None:
+    """CLI entry point."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--data-root", type=Path, required=True)
+    parser.add_argument("--module-dir", type=str, default=None,
+                        help="Dir containing built _omnicopilot_cpp (build/cpp)")
+    parser.add_argument("--radii", type=float, nargs="+", default=DEFAULT_RADII)
+    parser.add_argument("--frame-stride", type=int, default=20,
+                        help="Subsample every Nth common frame per scenario")
+    parser.add_argument("--min-agents", type=int, default=3)
+    parser.add_argument("--agent-trust", type=float, default=0.9)
+    parser.add_argument("--out", type=Path, default=None,
+                        help="Optional JSON output path for the sweep table")
+    args = parser.parse_args()
+
+    oc = import_cpp_module(args.module_dir)
+    summary = run_sweep(
+        oc, args.data_root, args.radii, args.frame_stride, args.min_agents, args.agent_trust
+    )
+
+    if args.out:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(summary, indent=2))
+        print(f"\nWrote sweep table -> {args.out}")
+
+    print("\nPick the radius at the knee: where mean_entities flattens near the true "
+          "distinct-object count while mean_confirmed stays high.")
+
+
+if __name__ == "__main__":
+    main()
