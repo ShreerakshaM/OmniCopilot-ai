@@ -125,7 +125,7 @@ def debug_one_frame(oc: Any, ds: Any, sid: str, fi: int, radius: float) -> None:
     rather than guessing.
     """
     import numpy as np  # noqa: PLC0415
-    from omnicopilot.data.opv2v import OPV2VDataset  # noqa: PLC0415
+    from omnicopilot.data.opv2v import OPV2VDataset, transform_points  # noqa: PLC0415
 
     frames = ds.get_all_agent_frames(sid, fi, load_lidar=False)
     per_agent = {aid: len(f.gt_objects) for aid, f in frames.items()}
