@@ -115,9 +115,9 @@ class GroundTruthObject:
 
     object_key: str  # Per-agent dict key (NOT stable across agents).
     obj_type: str  # e.g. "Car".
-    location_ego: npt.NDArray[np.float64]  # (3,) center in this agent's ego frame.
+    location_world: npt.NDArray[np.float64]  # (3,) center in WORLD frame.
     dimensions: npt.NDArray[np.float64]  # (3,) full length, width, height (meters).
-    yaw_rad: float  # Heading in radians (ego frame).
+    yaw_rad: float  # Heading in radians.
     ass_id: int = -1  # Cross-agent association id (-1 if not populated).
 
 
@@ -135,11 +135,19 @@ class OPV2VFrame:
     gt_objects: list[GroundTruthObject] = field(default_factory=list)
 
     def gt_locations_world(self) -> npt.NDArray[np.float64]:
-        """Ground-truth object centers transformed to world frame, shape (M, 3)."""
+        """Ground-truth object centers in the WORLD frame, shape (M, 3).
+
+        OPV2V stores ``vehicles[].location`` in ABSOLUTE WORLD (CARLA) coordinates,
+        NOT the agent's ego frame. Verified empirically on this dataset upload
+        (see scripts/sweep_association_radius.py --debug-frame): treating location
+        as world-frame makes the same physical car seen by multiple agents overlap
+        (28 of 33 objects seen by >=2 agents in a 3-agent frame), whereas applying
+        ``pose @ location`` double-transforms and scatters objects ~500 m apart
+        (0 matches). So we return the location directly -- do NOT apply the pose.
+        """
         if not self.gt_objects:
             return np.zeros((0, 3), dtype=np.float64)
-        locs = np.array([o.location_ego for o in self.gt_objects], dtype=np.float64)
-        return transform_points(self.pose, locs)
+        return np.array([o.location_world for o in self.gt_objects], dtype=np.float64)
 
 
 @dataclass
@@ -357,7 +365,11 @@ class OPV2VDataset:
 
     @staticmethod
     def _parse_gt(meta: dict[str, Any]) -> list[GroundTruthObject]:
-        """Parse the ``vehicles`` block into ground-truth objects (ego frame)."""
+        """Parse the ``vehicles`` block into ground-truth objects (WORLD frame).
+
+        NOTE: OPV2V's ``vehicles[].location`` is in the ABSOLUTE WORLD frame, not the
+        agent ego frame. See OPV2VFrame.gt_locations_world for the empirical evidence.
+        """
         objects: list[GroundTruthObject] = []
         for key, v in meta.get("vehicles", {}).items():
             ext = v["extent"]  # HALF dimensions.
@@ -365,7 +377,7 @@ class OPV2VDataset:
                 GroundTruthObject(
                     object_key=str(key),
                     obj_type=str(v.get("obj_type", "Car")),
-                    location_ego=np.array(v["location"], dtype=np.float64),
+                    location_world=np.array(v["location"], dtype=np.float64),
                     dimensions=np.array(
                         [2.0 * ext[0], 2.0 * ext[1], 2.0 * ext[2]], dtype=np.float64
                     ),
