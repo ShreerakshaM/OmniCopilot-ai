@@ -159,6 +159,51 @@ def debug_one_frame(oc: Any, ds: Any, sid: str, fi: int, radius: float) -> None:
                     dists.append(f"{aid}:{d:.2f}m")
             print(f"    obj{i} @ ({w0[i][0]:.1f},{w0[i][1]:.1f}) -> {', '.join(dists)}")
 
+    # 4) FRAME HYPOTHESIS TEST — decide what frame `location` is actually in on THIS
+    #    dataset upload. Compare two candidate transforms by how many objects match
+    #    across agents (matches => the transform is correct):
+    #      H1: world = pose @ location   (location is EGO frame; current loader assumption)
+    #      H2: world = location          (location is already WORLD frame)
+    #    Also H3: world = inv(pose) @ location (in case location is world and we must
+    #    map into a common ego frame the other way). The winner is whichever yields
+    #    many multi-agent matches at ~2-3 m.
+    def _match_count(centers_by_agent: dict, tol: float) -> tuple[int, int]:
+        entries = []
+        for aid, cs in centers_by_agent.items():
+            for c in cs:
+                entries.append((aid, c))
+        used = [False] * len(entries)
+        distinct = multi = 0
+        for i in range(len(entries)):
+            if used[i]:
+                continue
+            group_agents = {entries[i][0]}
+            used[i] = True
+            for j in range(i + 1, len(entries)):
+                if used[j] or entries[j][0] in group_agents:
+                    continue
+                if float(np.linalg.norm(entries[i][1] - entries[j][1])) <= tol:
+                    group_agents.add(entries[j][0])
+                    used[j] = True
+            distinct += 1
+            if len(group_agents) >= 2:
+                multi += 1
+        return distinct, multi
+
+    print("[DEBUG] --- transform hypothesis test (matches at tol=3.0m) ---")
+    h1 = {aid: f.gt_locations_world() for aid, f in frames.items()}  # pose @ location
+    h2 = {aid: np.array([o.location_ego for o in f.gt_objects], dtype=np.float64)
+          for aid, f in frames.items()}                              # location as-is
+    h3 = {}
+    for aid, f in frames.items():
+        inv = np.linalg.inv(f.pose)
+        locs = np.array([o.location_ego for o in f.gt_objects], dtype=np.float64)
+        h3[aid] = transform_points(inv, locs) if len(locs) else locs  # inv(pose) @ location
+    for name, cand in (("H1 pose@loc", h1), ("H2 loc as-is", h2), ("H3 inv(pose)@loc", h3)):
+        d, m = _match_count(cand, 3.0)
+        print(f"    {name:>18}: {d} distinct, {m} seen by >=2 agents")
+    print("[DEBUG] The correct transform is the one with MANY '>=2 agents' matches.")
+
 
 def run_sweep(
     oc: Any,
