@@ -98,17 +98,17 @@ class TestCrossAgentMatching:
 
     def test_shared_object_matched(self) -> None:
         """A car seen by two agents (from different ego frames) is matched."""
-        # Agent 0 at origin; agent 1 translated by (10, 0, 0).
+        # Agent 0 at origin; agent 1 translated by (10, 0, 0). Poses are metadata
+        # only now (GT locations are already world-frame and NOT pose-transformed).
         pose0 = np.identity(4)
         pose1 = np.identity(4)
         pose1[:3, 3] = [10.0, 0.0, 0.0]
 
-        # A physical car at world (5, 0, 0):
-        #  - in agent 0's ego frame: (5, 0, 0)
-        #  - in agent 1's ego frame: (-5, 0, 0)
+        # A physical car at WORLD (5, 0, 0) — both agents report it in world coords,
+        # with a small localization difference (5.0 vs 5.4) that must still match.
         obj0 = GroundTruthObject("k0", "Car", np.array([5.0, 0.0, 0.0]),
                                  np.array([4.5, 2.0, 1.5]), 0.0)
-        obj1 = GroundTruthObject("k9", "Car", np.array([-5.0, 0.0, 0.0]),
+        obj1 = GroundTruthObject("k9", "Car", np.array([5.4, 0.2, 0.0]),
                                  np.array([4.5, 2.0, 1.5]), 0.0)
 
         frames = {
@@ -125,13 +125,13 @@ class TestCrossAgentMatching:
         """Objects far apart in world frame form separate groups (blind spots)."""
         pose0 = np.identity(4)
         pose1 = np.identity(4)
-        pose1[:3, 3] = [100.0, 0.0, 0.0]  # agents far apart
+        pose1[:3, 3] = [100.0, 0.0, 0.0]  # pose is metadata only now
 
+        # World-frame locations that are genuinely far apart -> not the same object.
         obj0 = GroundTruthObject("a", "Car", np.array([1.0, 0.0, 0.0]),
                                  np.array([4.5, 2.0, 1.5]), 0.0)
-        obj1 = GroundTruthObject("b", "Car", np.array([1.0, 0.0, 0.0]),
+        obj1 = GroundTruthObject("b", "Car", np.array([101.0, 0.0, 0.0]),
                                  np.array([4.5, 2.0, 1.5]), 0.0)
-        # world positions: obj0 -> (1,0,0); obj1 -> (101,0,0) — far apart.
 
         frames = {
             "0": self._make_frame("0", pose0, [obj0]),
@@ -142,14 +142,25 @@ class TestCrossAgentMatching:
 
 
 class TestGroundTruthWorld:
-    """Tests that GT locations transform to world frame correctly."""
+    """Tests that GT locations are treated as WORLD-frame (returned as-is)."""
 
-    def test_gt_locations_world(self) -> None:
-        """Ego-frame GT is transformed to world via the pose."""
+    def test_gt_locations_are_world_frame_asis(self) -> None:
+        """OPV2V location is already world-frame; gt_locations_world returns it as-is.
+
+        The agent pose must NOT be applied (doing so double-transforms and scatters
+        objects, which was the bug that produced 0 cross-agent matches). A non-trivial
+        pose here proves the pose is correctly ignored.
+        """
         pose = np.identity(4)
-        pose[:3, 3] = [100.0, 200.0, 0.0]
+        pose[:3, 3] = [100.0, 200.0, 0.0]  # non-trivial translation
         obj = GroundTruthObject("k", "Car", np.array([5.0, 0.0, 0.0]),
                                 np.array([4.5, 2.0, 1.5]), 0.0)
         frame = OPV2VFrame("s", "0", 0, 0.0, pose, gt_objects=[obj])
         world = frame.gt_locations_world()
-        np.testing.assert_allclose(world[0], [105.0, 200.0, 0.0], atol=1e-9)
+        # World location equals the stored location, independent of pose.
+        np.testing.assert_allclose(world[0], [5.0, 0.0, 0.0], atol=1e-9)
+
+    def test_gt_locations_world_empty(self) -> None:
+        """No objects -> empty (0,3) array."""
+        frame = OPV2VFrame("s", "0", 0, 0.0, np.identity(4), gt_objects=[])
+        assert frame.gt_locations_world().shape == (0, 3)
