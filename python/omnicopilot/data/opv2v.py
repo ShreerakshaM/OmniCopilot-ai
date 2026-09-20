@@ -367,17 +367,27 @@ class OPV2VDataset:
     def _parse_gt(meta: dict[str, Any]) -> list[GroundTruthObject]:
         """Parse the ``vehicles`` block into ground-truth objects (WORLD frame).
 
-        NOTE: OPV2V's ``vehicles[].location`` is in the ABSOLUTE WORLD frame, not the
-        agent ego frame. See OPV2VFrame.gt_locations_world for the empirical evidence.
+        Frame/format confirmed against the dataset owner's own code
+        (OpenCOOD box_utils.project_world_objects) and a real YAML on this upload:
+        - ``location`` is the vehicle origin in the ABSOLUTE WORLD frame.
+        - ``center`` is the bounding-box centroid offset relative to that origin, so
+          the true object world center is ``location + center`` (OpenCOOD builds
+          object_pose = location + center before any transform). The x/y offset is
+          ~cm but center[2] is ~0.65 m (car centroid height), so we add it for an
+          exact match to the dataset's GT definition.
+        - ``extent`` is HALF dimensions (doubled below).
+        - ``angle`` is ``[roll, yaw, pitch]`` in DEGREES; yaw is angle[1].
         """
         objects: list[GroundTruthObject] = []
         for key, v in meta.get("vehicles", {}).items():
             ext = v["extent"]  # HALF dimensions.
+            location = np.array(v["location"], dtype=np.float64)
+            center = np.array(v.get("center", [0.0, 0.0, 0.0]), dtype=np.float64)
             objects.append(
                 GroundTruthObject(
                     object_key=str(key),
                     obj_type=str(v.get("obj_type", "Car")),
-                    location_world=np.array(v["location"], dtype=np.float64),
+                    location_world=location + center,
                     dimensions=np.array(
                         [2.0 * ext[0], 2.0 * ext[1], 2.0 * ext[2]], dtype=np.float64
                     ),
