@@ -192,12 +192,12 @@ def debug_one_frame(oc: Any, ds: Any, sid: str, fi: int, radius: float) -> None:
 
     print("[DEBUG] --- transform hypothesis test (matches at tol=3.0m) ---")
     h1 = {aid: f.gt_locations_world() for aid, f in frames.items()}  # pose @ location
-    h2 = {aid: np.array([o.location_ego for o in f.gt_objects], dtype=np.float64)
+    h2 = {aid: np.array([o.location_world for o in f.gt_objects], dtype=np.float64)
           for aid, f in frames.items()}                              # location as-is
     h3 = {}
     for aid, f in frames.items():
         inv = np.linalg.inv(f.pose)
-        locs = np.array([o.location_ego for o in f.gt_objects], dtype=np.float64)
+        locs = np.array([o.location_world for o in f.gt_objects], dtype=np.float64)
         h3[aid] = transform_points(inv, locs) if len(locs) else locs  # inv(pose) @ location
     for name, cand in (("H1 pose@loc", h1), ("H2 loc as-is", h2), ("H3 inv(pose)@loc", h3)):
         d, m = _match_count(cand, 3.0)
