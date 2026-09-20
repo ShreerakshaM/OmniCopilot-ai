@@ -73,11 +73,26 @@ void BindWorldModel(py::module_& m) {
       .def_readwrite("needs_corroboration", &TrackedEntity::needs_corroboration);
 
   // WorldModelConfig
+  // FusionConfig — association/fusion parameters.
+  py::class_<FusionConfig>(m, "FusionConfig")
+      .def(py::init<>())
+      .def_readwrite("association_iou_threshold",
+                     &FusionConfig::association_iou_threshold)
+      .def_readwrite("association_max_distance_m",
+                     &FusionConfig::association_max_distance_m)
+      .def_readwrite("conflict_resolution_threshold",
+                     &FusionConfig::conflict_resolution_threshold);
+
   py::class_<WorldModelConfig>(m, "WorldModelConfig")
       .def(py::init<>())
       .def_readwrite("max_entities", &WorldModelConfig::max_entities)
       .def_readwrite("stale_confidence_threshold", &WorldModelConfig::stale_confidence_threshold)
-      .def_readwrite("stale_timeout_s", &WorldModelConfig::stale_timeout_s);
+      .def_readwrite("stale_timeout_s", &WorldModelConfig::stale_timeout_s)
+      .def_readwrite("removal_timeout_s", &WorldModelConfig::removal_timeout_s)
+      .def_readwrite("confirmation_threshold", &WorldModelConfig::confirmation_threshold)
+      .def_readwrite("confirmation_source_count", &WorldModelConfig::confirmation_source_count)
+      .def_readwrite("spatial_cell_size_m", &WorldModelConfig::spatial_cell_size_m)
+      .def_readwrite("fusion", &WorldModelConfig::fusion);
 
   // WorldModelStats
   py::class_<WorldModelStats>(m, "WorldModelStats")

@@ -33,9 +33,9 @@ struct WorldModel::Impl {
 
   Impl(WorldModelConfig cfg)
       : config(std::move(cfg)),
-        fusion(FusionConfig{}),
+        fusion(config.fusion),
         uncertainty(UncertaintyConfig{}),
-        spatial_index(SpatialIndexConfig{cfg.spatial_cell_size_m}) {}
+        spatial_index(SpatialIndexConfig{config.spatial_cell_size_m}) {}
 
   // Update entity lifecycle state based on confidence and timing.
   void UpdateEntityState(TrackedEntity& entity) {

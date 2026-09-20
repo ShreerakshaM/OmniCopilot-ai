@@ -43,6 +43,10 @@ struct WorldModelConfig {
 
   /// Spatial index cell size (meters).
   double spatial_cell_size_m = 5.0;
+
+  /// Fusion/association parameters (e.g. association_max_distance_m).
+  /// Passed through to the internal FusionEngine.
+  FusionConfig fusion;
 };
 
 /// Snapshot statistics of the world model.
