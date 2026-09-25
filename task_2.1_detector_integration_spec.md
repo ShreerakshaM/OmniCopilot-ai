@@ -1,5 +1,21 @@
 # Task 2.1 Spec — Detector Integration & Achievable Cooperative Gain (Phase 2)
 
+> **STATUS UPDATE (2a blocked → 2b adopted).** The real-detector plan below (2a)
+> was blocked on the Kaggle runtime: both OpenCOOD (spconv/cumm) and MMDetection3D
+> (mmcv) are 2021–2022 stacks incompatible with Kaggle's **Python 3.12**. Concretely:
+> spconv's `cumm` JIT-compile fails (missing `tensorview` headers); mmcv/openmim
+> crash on `pkgutil.ImpImporter` (removed in 3.12); Kaggle's env-pin did not lower
+> Python; conda is not installed. After time-boxed attempts we adopted **2b: a
+> SIMULATED detector** (GT + literature-calibrated noise/dropout) to measure
+> cooperative gain through our own C++ world model, on Python 3.12, with zero
+> detector dependencies. 2a remains a documented drop-in upgrade for a Python-3.10
+> environment (Colab with a data subset, or a local GPU) — the downstream pipeline
+> is identical; only the detection source changes.
+>
+> Implemented for 2b: `perception/simulated_detector.py`,
+> `scripts/analyze_detection_cooperation.py`, tests in
+> `tests/unit/test_simulated_detector.py`.
+
 **Goal of Phase 2:** replace the ground-truth, fixed-confidence inputs used so far
 (Results 01 and 02) with a **real 3D object detector**, so we measure *achievable*
 cooperative gain under real detection uncertainty and occlusion — not the theoretical
