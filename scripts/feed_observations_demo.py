@@ -144,13 +144,18 @@ def run_real(oc: Any, data_root: Path, scenario_id: str | None,
     print(f"C++ fused entities:         {stats.total_entities} "
           f"(confirmed={stats.confirmed}, tentative={stats.tentative})")
     print(f"Mean fused confidence:      {stats.mean_confidence:.3f}")
-    if best_single > 0:
-        print(f"Fusion coverage gain:       "
-              f"{stats.total_entities / best_single:.2f}x vs best single agent")
-    print("\nInterpretation: the C++ fusion engine associated overlapping "
-          "observations\n(same physical object seen by multiple agents) into single "
-          "entities,\nwhile keeping agent-exclusive objects separate -> cooperative "
-          "perception\nthrough the real core, not just a ground-truth count.")
+    # NOTE: we deliberately do NOT print a "coverage gain vs best single agent" ratio
+    # here. That ratio (fused_entities / best_single_raw_count) divides a DEDUPLICATED
+    # count by a NON-deduplicated one -- apples-to-oranges, and misleading (it can fall
+    # below 1.0 even when fusion is working correctly). For the correct cooperative
+    # metric (single-agent AP vs. cooperative-fused AP, like-with-like), see
+    # scripts/analyze_detection_cooperation.py and docs/results/03_detection_cooperation.md.
+    print("\nInterpretation: this demo shows the end-to-end plumbing -- real per-agent "
+          "objects\nflow through the pybind11 bridge into the C++ WorldModel, which "
+          "associates the\nsame physical object seen by multiple agents into single "
+          "confirmed entities and\nkeeps agent-exclusive objects separate. It is a "
+          "PIPELINE demo, not a benchmark;\nfor the quantitative cooperative result use "
+          "analyze_detection_cooperation.py.")
 
 
 def run_synthetic(oc: Any, agent_trust: float) -> None:

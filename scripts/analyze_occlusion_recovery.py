@@ -1,5 +1,17 @@
 """Occluded-object recovery — the honest, paper-aligned cooperation metric.
 
+> NOTE ON A DEGENERATE RESULT: run on ground-truth objects, this metric returns
+> ~100% recovery by construction. "Missed" is defined as "an object some OTHER agent
+> sees but this ego does not" -- so every missed object is, by definition, seen by the
+> fleet, making recovered/missed always ~1.0. That is the trivial GT ceiling and is NOT
+> a meaningful measure of cooperation. The USEFUL quantity it does produce is
+> `mean_missed_per_ego` (~3.4 objects) -- how many blind-spot objects an agent has for
+> cooperation to address. For the real cooperative result under detection uncertainty,
+> see scripts/analyze_detection_cooperation.py and docs/results/03_detection_cooperation.md
+> (recall 0.45 -> 0.70 through fusion). This script is kept for the blind-spot-count
+> statistic and as the basis for an ACHIEVABLE recovery metric once real/simulated
+> detections replace GT.
+
 Raw object-count gain (Result 01) is dominated by cars every agent can already
 see, so it understates cooperation's real value and is sensitive to how counts are
 deduplicated. This metric isolates what cooperation actually fixes: BLIND SPOTS.

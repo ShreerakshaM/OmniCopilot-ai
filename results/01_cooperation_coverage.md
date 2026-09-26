@@ -1,114 +1,75 @@
-# Result 01 — Cooperation Coverage (Ground-Truth Ceiling)
+# Result 01 — Cooperation Coverage (Ground-Truth Ceiling) — CORRECTED
 
-**Date:** first quantitative result of the project.
-**Kill Gate A:** PASSED with margin.
-**Data:** OPV2V test scenes (`opv2v-2` upload, 16 scenarios, 2-5 agents).
-**Method:** ground-truth object coverage — how many unique objects the fleet sees
-collectively vs. the best-placed single agent. No detection model (this is the
-theoretical CEILING of cooperative benefit; achievable gain with a real detector is
-measured later in Phase 2-3).
+> **CORRECTION NOTICE.** The original version of this result reported a **2.45×**
+> coverage gain (up to 4.27× on the best frame). Those numbers were **inflated by a
+> coordinate-transform bug**: the loader treated OPV2V `vehicles[].location` as
+> ego-frame and applied `world = pose @ location`, when the location is already in the
+> WORLD frame. This scattered each agent's objects by its own pose offset (~500 m), so
+> the same physical car seen by N agents was counted as N distinct objects — inflating
+> the "collective" count and the gain. Fixed in commit `0f7dc3c` (+ `bdde5e4` for the
+> `+ center` offset), confirmed against the dataset owner's own code
+> (OpenCOOD `box_utils.project_world_objects`). The corrected numbers below are smaller
+> and honest. See `docs/results/03_detection_cooperation.md` for the primary Phase 2
+> result (detector-based mAP), which supersedes raw coverage as the headline metric.
 
-Reproduce: `notebooks/03_cooperation_analysis.ipynb` +
-`scripts/analyze_cooperation_coverage.py`.
+**Data:** OPV2V `opv2v-2`, 16 scenarios, 2170 frames, mean 2.76 agents/frame.
+**Method:** ground-truth object coverage — unique objects the fleet sees collectively
+vs. the best-placed single agent. No detector (theoretical CEILING of cooperation).
+**Object identity across agents:** world-frame proximity, tolerance 2.5 m (per-agent
+keys are not shared; corrected transform makes shared cars coincide within ~2 m).
+
+Reproduce: `scripts/analyze_cooperation_coverage.py`.
 
 ---
 
-## Headline
-
-Across 2170 frames (mean 2.76 agents/frame):
+## Headline (CORRECTED)
 
 | Metric | Value |
 |---|---|
 | Best single agent sees | 16.5 objects/frame |
-| Fleet collectively sees | 43.7 objects/frame |
-| **Gain vs best single agent** | **2.45×** |
-| Gain vs worst single agent | 3.11× |
-| **Extra objects revealed by cooperation** | **+27.2 / frame** |
+| Fleet collectively sees | 18.5 objects/frame |
+| **Mean gain vs best single agent** | **1.14×** |
+| Median gain | 1.12× |
+| Gain vs worst single agent | 1.44× |
+| **Extra objects revealed by cooperation** | **+2.0 / frame** |
 
-Even the best-positioned vehicle is blind to ~27 objects per frame that its neighbors
-can see. Cooperation more than doubles perception coverage.
-
----
-
-## Density-scaling curve (the key figure)
-
-Cooperative gain rises monotonically with the number of agents, and begins to saturate
-past ~4 agents (consistent with the OPV2V paper):
-
-| Agents | Mean gain (vs best single) | Frames |
-|---|---|---|
-| 2 | 1.90× | 994 |
-| 3 | 2.66× | 874 |
-| 4 | 3.57× | 135 |
-| 5 | 3.74× | 167 |
-
-```
-gain
-3.74×                                    ●  (5)
-3.57×                            ●  (4)
-2.66×               ●  (3)
-1.90×    ●  (2)
-        └────┴──────┴──────┴──────┴──── agents
-         2    3      4      5
-```
-
-Observations:
-- Monotonic increase — more viewpoints reveal more of the scene.
-- Saturation between 4 and 5 agents (3.57 → 3.74) — beyond ~4 well-placed agents,
-  additional agents add little because coverage is already near-complete.
+Corrected reading: on this data, a single well-placed agent already sees most objects
+in range; cooperation adds ~2 distinct objects per frame on average. The raw-count gain
+is modest — which is expected and is *why raw coverage is the wrong headline metric*.
+The value of cooperation shows up in **detection quality on the hard/occluded objects**,
+not in raw counts — see Result 03 (recall 0.45 → 0.70, mAP +0.157 through fusion).
 
 ---
 
-## Why this matters for the project (the thesis this motivates)
+## Retracted content (do not cite)
 
-More agents → more cooperative benefit (this curve). **But** more agents → more V2X
-channel congestion. So as density grows, the *potential* benefit grows while the
-*communication cost* grows too. Capturing the ~3.7× benefit at high density WITHOUT
-drowning the channel is precisely what the intelligent-communication policy + realistic
-V2X networking layers address. This curve provides real-data motivation for the project's
-central question: **what to communicate, to whom, when — under a constrained channel.**
+The following from the original version are **retracted** as artifacts of the bug and
+must not be quoted:
+- "2.45× / 3.74× coverage gain" and "+27 objects/frame".
+- The density-scaling curve (1.90× → 3.74× by agent count).
+- The "4.27×, +85 objects" demo frame (`2021_08_22_07_52_02` frame 139).
 
----
-
-## Honest caveats
-
-- **This is a ceiling, not achievable performance.** It counts ground-truth objects with
-  ≥1 LiDAR hit for an agent — i.e. what is *theoretically visible*. A real neural detector
-  will miss some (distant, sparse, heavily occluded), so the achievable cooperative gain
-  (Phase 2-3) will be lower. The ceiling being 2.45×-3.74× means there is substantial
-  headroom for cooperation to exploit — which is what we needed to confirm before building
-  the detection pipeline.
-- **Object identity across agents is by world-frame proximity** (tolerance 3.0m), since
-  OPV2V per-agent object keys are not shared. Validated: shared cars match within ~2m.
-- **4- and 5-agent samples are smaller** (135 / 167 frames) — the high-density points are
-  directionally solid but based on fewer scenes than the 2-3 agent points.
+A corrected per-agent-count density curve has **not** been recomputed (the aggregate
+run only produced the corrected headline). If a density curve is needed later, re-run
+`analyze_cooperation_coverage.py` with a per-agent-count breakdown on the corrected
+loader. Do not reuse the old curve.
 
 ---
 
-## Kill Gate A verdict
+## Why this matters for the project (unchanged thesis, corrected magnitude)
 
-PASSED with margin. Target was ≥ +15 AP-equivalent improvement / clear cooperative gain;
-concern threshold was < +5. Result: **+27 objects/frame, 2.45× coverage**, with a clean
-monotonic density-scaling curve. The core premise — distributed agents collectively
-perceive far more than any individual — is empirically confirmed on real data. Proceed to
-Phase 2 (real detector → achievable gain).
+More agents still means more *potential* coverage, but also more V2X channel
+congestion — the tension the intelligent-communication policy addresses. The corrected,
+smaller raw-coverage gain does not weaken that thesis; it reframes it: cooperation's
+measurable value is in **detection quality under uncertainty** (Result 03), and the
+research question — *what to communicate, to whom, when, under a constrained channel* —
+stands.
 
 ---
 
-## Demo scene identified
+## Kill Gate A verdict (re-assessed on corrected numbers)
 
-The strongest cooperation scenes all come from the 5-agent scenario
-**`2021_08_22_07_52_02`**, around frames 139-187 and 339-363:
-
-| Frame | Agents | Best single | Collective | Gain | Extra objects |
-|---|---|---|---|---|---|
-| 139 | 5 | 26 | 111 | 4.27× | +85 |
-| 179 | 5 | 26 | 110 | 4.23× | +84 |
-| 339 | 5 | 23 | 97 | 4.22× | +74 |
-| 185 | 5 | 26 | 108 | 4.15× | +82 |
-
-In this scenario, the best-placed vehicle sees ~26 objects while the 5-vehicle fleet
-collectively sees ~111 — the single agent is blind to **~85 objects** its neighbors can
-see. **This is the primary demo scene** for visualizing cooperative perception (Phase 10).
-
-Raw data: `docs/results/coverage_summary_opv2v2.json`.
+Kill Gate A asked whether cooperation shows meaningful gain. Raw coverage alone (+1.14×)
+is modest, but the **detector-based result (Result 03)** — cooperation lifting mAP
++0.157 (+63% rel.), recall +25 points, stable across seeds — is the decisive evidence.
+**Kill Gate A: PASSED**, on the Result 03 metric (the correct one), not on raw coverage.
