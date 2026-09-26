@@ -66,6 +66,14 @@ void BindWorldModel(py::module_& m) {
       .def_readwrite("position", &TrackedEntity::position)
       .def_readwrite("velocity", &TrackedEntity::velocity)
       .def_readwrite("confidence", &TrackedEntity::confidence)
+      .def_readwrite("position_uncertainty_m",
+                     &TrackedEntity::position_uncertainty_m)
+      .def_readwrite("position_covariance_xx",
+                     &TrackedEntity::position_covariance_xx)
+      .def_readwrite("position_covariance_xy",
+                     &TrackedEntity::position_covariance_xy)
+      .def_readwrite("position_covariance_yy",
+                     &TrackedEntity::position_covariance_yy)
       .def_readwrite("state", &TrackedEntity::state)
       .def_readwrite("unique_source_count", &TrackedEntity::unique_source_count)
       .def_readwrite("observation_count", &TrackedEntity::observation_count)
@@ -80,6 +88,8 @@ void BindWorldModel(py::module_& m) {
                      &FusionConfig::association_iou_threshold)
       .def_readwrite("association_max_distance_m",
                      &FusionConfig::association_max_distance_m)
+      .def_readwrite("association_mahalanobis_threshold",
+                     &FusionConfig::association_mahalanobis_threshold)
       .def_readwrite("conflict_resolution_threshold",
                      &FusionConfig::conflict_resolution_threshold);
 

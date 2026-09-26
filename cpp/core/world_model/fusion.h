@@ -21,6 +21,9 @@ struct FusionConfig {
   /// Maximum distance (meters) for observation-to-entity association.
   double association_max_distance_m = 5.0;
 
+  /// Maximum squared Mahalanobis distance for association.
+  double association_mahalanobis_threshold = 9.21;
+
   /// Weight given to agent trust in fusion.
   double trust_weight = 0.5;
 

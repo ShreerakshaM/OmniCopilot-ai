@@ -10,6 +10,9 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
+
+#include <Eigen/Dense>
 
 namespace omnicopilot {
 
@@ -212,42 +215,54 @@ void TemporalTracker::Update(const Observation& obs) {
   double s10 = Mat4(impl_->P, 1, 0);
   double s11 = Mat4(impl_->P, 1, 1) + r;
 
-  // Invert 2x2 S.
-  double det = s00 * s11 - s01 * s10;
-  if (std::abs(det) < 1e-12) {
-    // Singular — skip update.
+  Eigen::Matrix2d innovation_covariance;
+  innovation_covariance << s00, s01, s10, s11;
+  Eigen::LDLT<Eigen::Matrix2d> decomposition(innovation_covariance);
+  if (decomposition.info() != Eigen::Success ||
+      !decomposition.isPositive()) {
     return;
   }
-  double inv_det = 1.0 / det;
-  double si00 = s11 * inv_det;
-  double si01 = -s01 * inv_det;
-  double si10 = -s10 * inv_det;
-  double si11 = s00 * inv_det;
+  Eigen::Matrix2d innovation_inverse =
+      decomposition.solve(Eigen::Matrix2d::Identity());
 
   // Kalman gain: K = P * H^T * S^-1  (4x2 matrix)
-  // K[i][j] = P[i][0]*Si[0][j] + P[i][1]*Si[1][j]
-  std::array<double, 8> K = {};  // 4x2 row-major
-  for (int i = 0; i < kStateDim; ++i) {
-    double p0 = Mat4(impl_->P, i, 0);
-    double p1 = Mat4(impl_->P, i, 1);
-    K[i * 2 + 0] = p0 * si00 + p1 * si10;
-    K[i * 2 + 1] = p0 * si01 + p1 * si11;
+  Eigen::Matrix<double, kStateDim, kStateDim> covariance;
+  for (int row = 0; row < kStateDim; ++row) {
+    for (int col = 0; col < kStateDim; ++col) {
+      covariance(row, col) = Mat4(impl_->P, row, col);
+    }
   }
+  Eigen::Matrix<double, kMeasDim, kStateDim> measurement_model =
+      Eigen::Matrix<double, kMeasDim, kStateDim>::Zero();
+  measurement_model(0, 0) = 1.0;
+  measurement_model(1, 1) = 1.0;
+  Eigen::Matrix<double, kStateDim, kMeasDim> kalman_gain =
+      covariance * measurement_model.transpose() * innovation_inverse;
 
   // State update: x = x + K * y
+  Eigen::Vector4d state_vector;
+  for (int i = 0; i < kStateDim; ++i) state_vector(i) = impl_->state[i];
+  Eigen::Vector2d innovation(y0, y1);
+  state_vector += kalman_gain * innovation;
   for (int i = 0; i < kStateDim; ++i) {
-    impl_->state[i] += K[i * 2 + 0] * y0 + K[i * 2 + 1] * y1;
+    impl_->state[i] = state_vector(i);
   }
 
-  // Covariance update: P = (I - K * H) * P
-  // Since H selects cols 0,1: (I - K*H)[i][j] = I[i][j] - K[i][0]*(j==0) - K[i][1]*(j==1)
+  // Joseph form preserves symmetry and positive semi-definiteness.
+  Eigen::Matrix2d measurement_noise =
+      Eigen::Matrix2d::Identity() * r;
+  Eigen::Matrix<double, kStateDim, kStateDim> identity =
+      Eigen::Matrix<double, kStateDim, kStateDim>::Identity();
+  Eigen::Matrix<double, kStateDim, kStateDim> covariance_updated =
+      (identity - kalman_gain * measurement_model) * covariance *
+          (identity - kalman_gain * measurement_model).transpose() +
+      kalman_gain * measurement_noise * kalman_gain.transpose();
   std::array<double, 16> Pnew = {};
-  for (int i = 0; i < kStateDim; ++i) {
-    for (int j = 0; j < kStateDim; ++j) {
-      double val = Mat4(impl_->P, i, j);
-      val -= K[i * 2 + 0] * Mat4(impl_->P, 0, j);
-      val -= K[i * 2 + 1] * Mat4(impl_->P, 1, j);
-      Mat4(Pnew, i, j) = val;
+  for (int row = 0; row < kStateDim; ++row) {
+    for (int col = 0; col < kStateDim; ++col) {
+      Mat4(Pnew, row, col) =
+          0.5 * (covariance_updated(row, col) +
+                 covariance_updated(col, row));
     }
   }
   impl_->P = Pnew;
@@ -273,6 +288,35 @@ double TemporalTracker::GetPositionUncertainty() const {
   double var_x = Mat4(impl_->P, 0, 0);
   double var_y = Mat4(impl_->P, 1, 1);
   return std::sqrt((var_x + var_y) / 2.0);
+}
+
+double TemporalTracker::InnovationMahalanobisDistance(
+    const Observation& obs) const {
+  if (!impl_->initialized) return std::numeric_limits<double>::infinity();
+
+  double confidence = std::clamp(obs.confidence, 0.1, 1.0);
+  Eigen::Matrix2d innovation_covariance;
+  innovation_covariance << Mat4(impl_->P, 0, 0) + 2.0 / confidence,
+      Mat4(impl_->P, 0, 1), Mat4(impl_->P, 1, 0),
+      Mat4(impl_->P, 1, 1) + 2.0 / confidence;
+  Eigen::LDLT<Eigen::Matrix2d> decomposition(innovation_covariance);
+  if (decomposition.info() != Eigen::Success ||
+      !decomposition.isPositive()) {
+    return std::numeric_limits<double>::infinity();
+  }
+
+  Eigen::Vector2d innovation(obs.position.x - impl_->state[0],
+                             obs.position.y - impl_->state[1]);
+  return innovation.dot(
+      decomposition.solve(innovation));
+}
+
+void TemporalTracker::GetPositionCovariance(double* xx, double* xy,
+                                            double* yy) const {
+  if (xx == nullptr || xy == nullptr || yy == nullptr) return;
+  *xx = Mat4(impl_->P, 0, 0);
+  *xy = Mat4(impl_->P, 0, 1);
+  *yy = Mat4(impl_->P, 1, 1);
 }
 
 std::vector<PredictedState> TemporalTracker::GetPredictions() const {

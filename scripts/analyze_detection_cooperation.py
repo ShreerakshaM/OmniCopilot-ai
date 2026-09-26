@@ -94,6 +94,7 @@ def run(oc: Any, data_root: Path, assoc_radius: float, frame_stride: int,
     single_preds: list[np.ndarray] = []
     coop_preds: list[np.ndarray] = []
     gts: list[np.ndarray] = []
+    by_agent_count: dict[int, dict[str, list[np.ndarray]]] = {}
     n_frames = 0
 
     for sid in sids:
@@ -151,11 +152,33 @@ def run(oc: Any, data_root: Path, assoc_radius: float, frame_stride: int,
             coop_preds.append(np.array(rows, dtype=np.float64) if rows
                               else np.zeros((0, 8)))
             gts.append(gt)
+            bucket = by_agent_count.setdefault(
+                len(frames), {"single": [], "cooperative": [], "ground_truth": []})
+            bucket["single"].append(single_preds[-1])
+            bucket["cooperative"].append(coop_preds[-1])
+            bucket["ground_truth"].append(gt)
             n_frames += 1
 
     thr = np.array([0.5, 0.7])
     single_m = compute_map(single_preds, gts, iou_thresholds=thr)
     coop_m = compute_map(coop_preds, gts, iou_thresholds=thr)
+
+    breakdown = {}
+    for agent_count, bucket in sorted(by_agent_count.items()):
+        single_count = compute_map(
+            bucket["single"], bucket["ground_truth"], iou_thresholds=thr)
+        coop_count = compute_map(
+            bucket["cooperative"], bucket["ground_truth"], iou_thresholds=thr)
+        breakdown[str(agent_count)] = {
+            "frames": len(bucket["ground_truth"]),
+            "single_agent_map": round(single_count.mean_average_precision, 4),
+            "cooperative_map": round(coop_count.mean_average_precision, 4),
+            "absolute_map_gain": round(
+                coop_count.mean_average_precision -
+                single_count.mean_average_precision, 4),
+            "single_agent_recall": round(single_count.recall, 4),
+            "cooperative_recall": round(coop_count.recall, 4),
+        }
 
     return {
         "data_root": str(data_root),
@@ -176,6 +199,7 @@ def run(oc: Any, data_root: Path, assoc_radius: float, frame_stride: int,
         },
         "absolute_map_gain": round(
             coop_m.mean_average_precision - single_m.mean_average_precision, 4),
+        "agent_count_breakdown": breakdown,
     }
 
 
@@ -210,6 +234,13 @@ def main() -> None:
           f"{c['precision']:>10} {c['recall']:>8}")
     print("-" * 68)
     print(f"Absolute mAP gain from cooperation: {summary['absolute_map_gain']:+.4f}")
+    print("\nPer-agent-count saturation:")
+    print(f"{'Agents':>8} {'Frames':>8} {'Single mAP':>12} "
+          f"{'Coop mAP':>10} {'Gain':>10} {'Coop recall':>12}")
+    for count, row in summary["agent_count_breakdown"].items():
+        print(f"{count:>8} {row['frames']:>8} {row['single_agent_map']:>12.4f} "
+              f"{row['cooperative_map']:>10.4f} {row['absolute_map_gain']:>+10.4f} "
+              f"{row['cooperative_recall']:>12.4f}")
     print("NOTE: simulated detector (GT + calibrated noise), not a CNN. See script docstring.")
 
     if args.out:

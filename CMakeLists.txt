@@ -112,6 +112,18 @@ if(NOT spdlog_FOUND)
   FetchContent_MakeAvailable(spdlog)
 endif()
 
+# Eigen (header-only linear algebra for Kalman covariance and gating)
+find_package(Eigen3 3.3 QUIET NO_MODULE)
+if(NOT Eigen3_FOUND)
+  include(FetchContent)
+  FetchContent_Declare(
+    eigen
+    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+    GIT_TAG 3.4.0
+  )
+  FetchContent_MakeAvailable(eigen)
+endif()
+
 # ─── Proto Generation (if Protobuf available) ────────────────────────────────
 
 if(OMNICOPILOT_HAS_PROTOBUF)

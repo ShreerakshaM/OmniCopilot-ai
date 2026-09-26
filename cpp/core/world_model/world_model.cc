@@ -119,6 +119,11 @@ void WorldModel::Tick(double current_time_s) {
       // Update entity position from tracker prediction.
       entity.position = tracker_it->second.GetPosition();
       entity.velocity = tracker_it->second.GetVelocity();
+      entity.position_uncertainty_m =
+          tracker_it->second.GetPositionUncertainty();
+      tracker_it->second.GetPositionCovariance(
+          &entity.position_covariance_xx, &entity.position_covariance_xy,
+          &entity.position_covariance_yy);
 
       // Regenerate predictions.
       entity.predictions = tracker_it->second.GetPredictions();
@@ -170,7 +175,15 @@ void WorldModel::IngestObservations(
 
       // Initialize temporal tracker.
       TemporalTracker tracker(TemporalTrackerConfig{});
-      tracker.Initialize(obs);
+      Observation trusted_obs = obs;
+      trusted_obs.confidence =
+          std::clamp(obs.confidence * agent_trust, 0.1, 1.0);
+      tracker.Initialize(trusted_obs);
+      new_entity.position_uncertainty_m =
+          tracker.GetPositionUncertainty();
+      tracker.GetPositionCovariance(&new_entity.position_covariance_xx,
+                                    &new_entity.position_covariance_xy,
+                                    &new_entity.position_covariance_yy);
       impl_->trackers.emplace(eid, std::move(tracker));
 
       // Add to spatial index.
@@ -192,9 +205,17 @@ void WorldModel::IngestObservations(
       // Update temporal tracker.
       auto tracker_it = impl_->trackers.find(assoc.entity_id);
       if (tracker_it != impl_->trackers.end()) {
-        tracker_it->second.Update(obs);
+        Observation trusted_obs = obs;
+        trusted_obs.confidence =
+            std::clamp(obs.confidence * agent_trust, 0.1, 1.0);
+        tracker_it->second.Update(trusted_obs);
         entity.position = tracker_it->second.GetPosition();
         entity.velocity = tracker_it->second.GetVelocity();
+        entity.position_uncertainty_m =
+            tracker_it->second.GetPositionUncertainty();
+        tracker_it->second.GetPositionCovariance(
+            &entity.position_covariance_xx, &entity.position_covariance_xy,
+            &entity.position_covariance_yy);
         entity.predictions = tracker_it->second.GetPredictions();
       }
 

@@ -43,6 +43,7 @@ target_link_libraries(omnicopilot_core
   PUBLIC
     omnicopilot_proto
     spdlog::spdlog
+    Eigen3::Eigen
 )
 
 # ─── Simulation Library ──────────────────────────────────────────────────────
@@ -94,6 +95,7 @@ if(OMNICOPILOT_BUILD_TESTS)
     tests/test_communication.cc
     tests/test_trust.cc
     tests/test_spatial_index.cc
+    tests/test_temporal_tracker.cc
   )
 
   target_link_libraries(omnicopilot_tests

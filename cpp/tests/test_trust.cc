@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 
+#include "cpp/core/trust/byzantine.h"
 #include "cpp/core/trust/reliability.h"
 
 namespace omnicopilot {
@@ -138,6 +139,43 @@ TEST_F(ReliabilityTest, AutoRegisterOnRecord) {
   auto* record = tracker.GetRecord("a1");
   ASSERT_NE(record, nullptr);
   EXPECT_EQ(record->verified_correct, 1);
+}
+
+Observation MakeConsensusObservation(const std::string& agent_id, double x,
+                                     ObjectClass object_class) {
+  Observation obs;
+  obs.agent_id = agent_id;
+  obs.object_class = object_class;
+  obs.position = {x, 0.0, 0.0};
+  obs.confidence = 0.9;
+  return obs;
+}
+
+TEST(ByzantineConsensusTest, TrustedSupermajorityWins) {
+  ByzantineConsensus consensus;
+  auto result = consensus.RunConsensus(
+      {MakeConsensusObservation("good_1", 10.0, ObjectClass::kVehicle),
+       MakeConsensusObservation("good_2", 10.5, ObjectClass::kVehicle),
+       MakeConsensusObservation("bad", 50.0, ObjectClass::kPedestrian)},
+      {0.9, 0.8, 0.1}, 2.0);
+
+  EXPECT_TRUE(result.consensus_reached);
+  EXPECT_NEAR(result.agreement_ratio, 0.944, 0.01);
+  EXPECT_EQ(result.agreeing_agents.size(), 2);
+  EXPECT_EQ(result.disagreeing_agents.size(), 1);
+  EXPECT_NEAR(result.consensus_observation.position.x, 10.23, 0.1);
+}
+
+TEST(ByzantineConsensusTest, NoConsensusForSplitEvidence) {
+  ByzantineConsensus consensus;
+  auto result = consensus.RunConsensus(
+      {MakeConsensusObservation("a1", 0.0, ObjectClass::kVehicle),
+       MakeConsensusObservation("a2", 10.0, ObjectClass::kVehicle),
+       MakeConsensusObservation("a3", 20.0, ObjectClass::kVehicle)},
+      {0.8, 0.8, 0.8}, 2.0);
+
+  EXPECT_FALSE(result.consensus_reached);
+  EXPECT_TRUE(result.agreeing_agents.size() <= 1);
 }
 
 }  // namespace

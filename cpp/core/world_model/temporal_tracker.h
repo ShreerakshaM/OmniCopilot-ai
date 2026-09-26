@@ -59,6 +59,12 @@ class TemporalTracker {
   /// Get the current position uncertainty (standard deviation in meters).
   double GetPositionUncertainty() const;
 
+  /// Get the x/y position covariance block of the Kalman state.
+  void GetPositionCovariance(double* xx, double* xy, double* yy) const;
+
+  /// Return the squared Mahalanobis innovation distance for an observation.
+  double InnovationMahalanobisDistance(const Observation& obs) const;
+
   /// Generate predictions for future time steps.
   /// @return Predicted states at intervals of prediction_step_s up to max horizon.
   std::vector<PredictedState> GetPredictions() const;

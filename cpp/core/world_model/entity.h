@@ -119,6 +119,10 @@ struct TrackedEntity {
 
   // Uncertainty.
   double confidence = 0.0;
+  double position_uncertainty_m = 1.0;
+  double position_covariance_xx = 1.0;
+  double position_covariance_xy = 0.0;
+  double position_covariance_yy = 1.0;
 
   // Lifecycle.
   EntityState state = EntityState::kTentative;

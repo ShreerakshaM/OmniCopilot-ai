@@ -79,6 +79,25 @@ TEST_F(FusionTest, AssociateCreatesNewForFarObservation) {
   EXPECT_TRUE(results[0].entity_id.empty());  // No match → new entity.
 }
 
+TEST_F(FusionTest, MahalanobisGateUsesEntityUncertainty) {
+  FusionEngine engine(config);
+  auto observation = MakeObs("a2", 15.0, 20.0, 1.0);
+  auto precise = engine.CreateEntity(MakeObs("a1", 10.0, 20.0, 1.0), 1.0);
+  precise.position_covariance_xx = 0.0;
+  precise.position_covariance_xy = 0.0;
+  precise.position_covariance_yy = 0.0;
+
+  auto rejected = engine.Associate({observation}, {precise});
+  ASSERT_EQ(rejected.size(), 1);
+  EXPECT_TRUE(rejected[0].entity_id.empty());
+
+  precise.position_covariance_xx = 100.0;
+  precise.position_covariance_yy = 100.0;
+  auto accepted = engine.Associate({observation}, {precise});
+  ASSERT_EQ(accepted.size(), 1);
+  EXPECT_EQ(accepted[0].entity_id, precise.entity_id);
+}
+
 TEST_F(FusionTest, AssociateRejectsClassMismatch) {
   FusionEngine engine(config);
   // Close but different class.
@@ -93,16 +112,15 @@ TEST_F(FusionTest, AssociateRejectsClassMismatch) {
   EXPECT_TRUE(results[0].entity_id.empty());  // Class mismatch → new.
 }
 
-TEST_F(FusionTest, FuseObservationUpdatesPosition) {
+TEST_F(FusionTest, FuseObservationLeavesKinematicsToTracker) {
   FusionEngine engine(config);
   auto entity = engine.CreateEntity(MakeObs("a1", 10.0, 20.0, 0.9), 1.0);
 
   auto obs2 = MakeObs("a2", 12.0, 22.0, 0.9);
   engine.FuseObservation(entity, obs2, 1.0);
 
-  // Position should move toward the new observation.
-  EXPECT_GT(entity.position.x, 10.0);
-  EXPECT_LT(entity.position.x, 12.0);
+  EXPECT_DOUBLE_EQ(entity.position.x, 10.0);
+  EXPECT_DOUBLE_EQ(entity.position.y, 20.0);
   EXPECT_EQ(entity.observation_count, 2);
   EXPECT_EQ(entity.unique_source_count, 2);
   EXPECT_FALSE(entity.needs_corroboration);

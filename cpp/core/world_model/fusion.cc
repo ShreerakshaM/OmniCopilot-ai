@@ -5,10 +5,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <set>
 #include <string>
 #include <unordered_map>
 #include <utility>
+
+#include <Eigen/Dense>
 
 namespace omnicopilot {
 
@@ -78,7 +81,31 @@ std::vector<AssociationResult> FusionEngine::Associate(
                 existing_entities[ei].object_class) {
           continue;  // Class mismatch — skip.
         }
-        candidates.push_back({oi, ei, dist});
+        double confidence = std::clamp(observations[oi].confidence, 0.1, 1.0);
+        double measurement_noise = 2.0 / confidence;
+        double s00 = existing_entities[ei].position_covariance_xx +
+                     measurement_noise;
+        double s01 = existing_entities[ei].position_covariance_xy;
+        double s11 = existing_entities[ei].position_covariance_yy +
+                     measurement_noise;
+        double dx = observations[oi].position.x -
+                    existing_entities[ei].position.x;
+        double dy = observations[oi].position.y -
+                    existing_entities[ei].position.y;
+        Eigen::Matrix2d innovation_covariance;
+        innovation_covariance << s00, s01, s01, s11;
+        Eigen::LDLT<Eigen::Matrix2d> decomposition(innovation_covariance);
+        double mahalanobis_squared = std::numeric_limits<double>::infinity();
+        if (decomposition.info() == Eigen::Success &&
+            decomposition.isPositive()) {
+          Eigen::Vector2d innovation(dx, dy);
+          mahalanobis_squared =
+              innovation.dot(decomposition.solve(innovation));
+        }
+        if (mahalanobis_squared <=
+            impl_->config.association_mahalanobis_threshold) {
+          candidates.push_back({oi, ei, dist});
+        }
       }
     }
   }
@@ -125,22 +152,9 @@ void FusionEngine::FuseObservation(TrackedEntity& entity,
   // Effective weight of this observation.
   double weight = obs.confidence * agent_trust;
 
-  // Weighted running average for position.
-  // New position = (old_weight * old_pos + new_weight * new_pos) /
-  //                (old_weight + new_weight)
-  double old_weight = entity.confidence;
-  double total_weight = old_weight + weight;
-
-  if (total_weight > 1e-10) {
-    double alpha = weight / total_weight;
-    entity.position.x += alpha * (obs.position.x - entity.position.x);
-    entity.position.y += alpha * (obs.position.y - entity.position.y);
-    entity.position.z += alpha * (obs.position.z - entity.position.z);
-
-    entity.velocity.vx += alpha * (obs.velocity.vx - entity.velocity.vx);
-    entity.velocity.vy += alpha * (obs.velocity.vy - entity.velocity.vy);
-    entity.velocity.vz += alpha * (obs.velocity.vz - entity.velocity.vz);
-  }
+  // Position and velocity are owned by TemporalTracker. Fusion handles
+  // existence, classification, dimensions, and provenance.
+  double total_weight = entity.confidence + weight;
 
   // Update heading (circular mean — handle wrap-around).
   if (std::abs(obs.heading) > 1e-10 || std::abs(entity.heading) > 1e-10) {
