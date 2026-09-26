@@ -310,5 +310,41 @@ TEST_F(WorldModelTest, MultipleObservationsFromSameAgentDontDoubleCount) {
   EXPECT_EQ(all[0]->state, EntityState::kTentative);
 }
 
+// ─── Adaptive trust (Phase 3 trust layer) ───────────────────────────────────
+
+TEST_F(WorldModelTest, CorroboratingAgentTrustRises) {
+  WorldModel wm(config);
+  double t0 = wm.GetAgentTrust("a2");  // initial trust for a fresh agent
+
+  // a1 establishes an object; a2 repeatedly corroborates it (same location) ->
+  // a2 agrees with consensus each time and should gain trust.
+  for (int i = 0; i < 30; ++i) {
+    double ts = 1.0 + i;
+    wm.IngestObservations({MakeObs("a1_" + std::to_string(i), "a1",
+                                   10.0, 20.0, 0.9, ts)}, 1.0);
+    wm.IngestObservations({MakeObs("a2_" + std::to_string(i), "a2",
+                                   10.2, 20.1, 0.9, ts)}, 1.0);
+  }
+  EXPECT_GT(wm.GetAgentTrust("a2"), t0);
+}
+
+TEST_F(WorldModelTest, PersistentOutlierAgentTrustFalls) {
+  WorldModel wm(config);
+  double t0 = wm.GetAgentTrust("liar");
+
+  // The liar reports objects nobody else sees; they stay single-source, go stale,
+  // and get purged as uncorroborated -> trust penalized. Advance time so the
+  // stale/removal timeouts fire and PurgeEntities runs.
+  double ts = 1.0;
+  for (int i = 0; i < 30; ++i) {
+    // A different phantom location each time (never corroborated).
+    wm.IngestObservations({MakeObs("liar_" + std::to_string(i), "liar",
+                                   500.0 + i * 20.0, -300.0, 0.9, ts)}, 1.0);
+    ts += 10.0;                 // exceed removal_timeout_s (5.0)
+    wm.Tick(ts);               // triggers stale -> lost -> purge with penalty
+  }
+  EXPECT_LT(wm.GetAgentTrust("liar"), t0);
+}
+
 }  // namespace
 }  // namespace omnicopilot

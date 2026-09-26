@@ -18,6 +18,7 @@
 #include "cpp/core/world_model/spatial_index.h"
 #include "cpp/core/world_model/temporal_tracker.h"
 #include "cpp/core/world_model/uncertainty.h"
+#include "cpp/core/trust/reliability.h"
 
 namespace omnicopilot {
 
@@ -47,6 +48,11 @@ struct WorldModelConfig {
   /// Fusion/association parameters (e.g. association_max_distance_m).
   /// Passed through to the internal FusionEngine.
   FusionConfig fusion;
+
+  /// Adaptive per-agent trust (learned from corroboration). The trust passed to
+  /// IngestObservations is treated as a per-observation PRIOR and blended with the
+  /// learned trust: effective_trust = prior * learned (option A, non-breaking).
+  ReliabilityConfig reliability;
 };
 
 /// Snapshot statistics of the world model.
@@ -119,6 +125,10 @@ class WorldModel {
 
   /// Get the current simulation time.
   double GetCurrentTime() const;
+
+  /// Get the current learned trust score for an agent (adaptive reliability).
+  /// Returns the configured initial trust for an unknown agent.
+  double GetAgentTrust(const std::string& agent_id) const;
 
   /// Reset the world model (clear all entities).
   void Reset();

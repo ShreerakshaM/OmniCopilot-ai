@@ -20,6 +20,7 @@ struct WorldModel::Impl {
   FusionEngine fusion;
   UncertaintyManager uncertainty;
   SpatialIndex spatial_index;
+  ReliabilityTracker reliability;
 
   // Per-entity temporal trackers.
   std::unordered_map<std::string, TemporalTracker> trackers;
@@ -35,7 +36,8 @@ struct WorldModel::Impl {
       : config(std::move(cfg)),
         fusion(config.fusion),
         uncertainty(UncertaintyConfig{}),
-        spatial_index(SpatialIndexConfig{config.spatial_cell_size_m}) {}
+        spatial_index(SpatialIndexConfig{config.spatial_cell_size_m}),
+        reliability(config.reliability) {}
 
   // Update entity lifecycle state based on confidence and timing.
   void UpdateEntityState(TrackedEntity& entity) {
@@ -80,6 +82,17 @@ struct WorldModel::Impl {
       }
     }
     for (const auto& eid : to_remove) {
+      // CONSENSUS SIGNAL (penalty): an entity that never reached multi-source
+      // confirmation and is now being removed was an uncorroborated singleton --
+      // treat it as a likely false positive and penalize its sole source agent.
+      auto ent_it = entities.find(eid);
+      if (ent_it != entities.end()) {
+        const TrackedEntity& e = ent_it->second;
+        if (e.unique_source_count < config.confirmation_source_count &&
+            !e.supporting_evidence.empty()) {
+          reliability.RecordIncorrect(e.supporting_evidence.front().agent_id);
+        }
+      }
       spatial_index.Remove(eid);
       trackers.erase(eid);
       entities.erase(eid);
@@ -161,6 +174,13 @@ void WorldModel::IngestObservations(
   for (const auto& assoc : associations) {
     const auto& obs = observations[assoc.observation_idx];
 
+    // Option A: blend the caller-supplied trust PRIOR with the learned per-agent
+    // trust. New agents start at the configured initial trust; agents whose
+    // observations repeatedly corroborate consensus rise, persistent outliers fall.
+    impl_->reliability.RegisterAgent(obs.agent_id);
+    double learned = impl_->reliability.GetTrust(obs.agent_id);
+    double effective_trust = std::clamp(agent_trust * learned, 0.0, 1.0);
+
     if (assoc.entity_id.empty()) {
       // New entity — no match found.
       if (impl_->entities.size() >= impl_->config.max_entities) {
@@ -170,14 +190,14 @@ void WorldModel::IngestObservations(
       }
 
       TrackedEntity new_entity =
-          impl_->fusion.CreateEntity(obs, agent_trust);
+          impl_->fusion.CreateEntity(obs, effective_trust);
       std::string eid = new_entity.entity_id;
 
       // Initialize temporal tracker.
       TemporalTracker tracker(TemporalTrackerConfig{});
       Observation trusted_obs = obs;
       trusted_obs.confidence =
-          std::clamp(obs.confidence * agent_trust, 0.1, 1.0);
+          std::clamp(obs.confidence * effective_trust, 0.1, 1.0);
       tracker.Initialize(trusted_obs);
       new_entity.position_uncertainty_m =
           tracker.GetPositionUncertainty();
@@ -200,14 +220,22 @@ void WorldModel::IngestObservations(
       if (it == impl_->entities.end()) continue;
 
       TrackedEntity& entity = it->second;
-      impl_->fusion.FuseObservation(entity, obs, agent_trust);
+      impl_->fusion.FuseObservation(entity, obs, effective_trust);
+
+      // CONSENSUS SIGNAL: this observation corroborated an entity that is (or is
+      // becoming) multi-source confirmed -> the agent agreed with consensus.
+      // Reward its trust. (Isolated single-source outliers are penalized later,
+      // when they go stale without corroboration — see UpdateEntityState/Purge.)
+      if (entity.unique_source_count >= impl_->config.confirmation_source_count) {
+        impl_->reliability.RecordCorrect(obs.agent_id);
+      }
 
       // Update temporal tracker.
       auto tracker_it = impl_->trackers.find(assoc.entity_id);
       if (tracker_it != impl_->trackers.end()) {
         Observation trusted_obs = obs;
         trusted_obs.confidence =
-            std::clamp(obs.confidence * agent_trust, 0.1, 1.0);
+            std::clamp(obs.confidence * effective_trust, 0.1, 1.0);
         tracker_it->second.Update(trusted_obs);
         entity.position = tracker_it->second.GetPosition();
         entity.velocity = tracker_it->second.GetVelocity();
@@ -345,6 +373,10 @@ WorldModelStats WorldModel::GetStats() const {
 uint64_t WorldModel::GetTick() const { return impl_->tick; }
 
 double WorldModel::GetCurrentTime() const { return impl_->current_time_s; }
+
+double WorldModel::GetAgentTrust(const std::string& agent_id) const {
+  return impl_->reliability.GetTrust(agent_id);
+}
 
 void WorldModel::Reset() {
   impl_->entities.clear();

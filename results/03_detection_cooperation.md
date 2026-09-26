@@ -84,6 +84,43 @@ values differ (simulated vs. CNN, by design).
 
 ---
 
+## Density-scaling — cooperative gain vs. agent count (saturation curve)
+
+Cooperative gain **rises with the number of agents and saturates at 4–5**, matching the
+OPV2V paper's key finding ("gain saturates after ~4 CAVs"):
+
+| Agents | Frames | Single mAP | Coop mAP | Gain | Coop recall |
+|---|---|---|---|---|---|
+| 2 | 102 | 0.263 | 0.356 | +0.093 | 0.656 |
+| 3 | 92 | 0.265 | 0.413 | +0.148 | 0.728 |
+| 4 | 14 | 0.184 | 0.423 | +0.239 | 0.677 |
+| 5 | 17 | 0.252 | 0.496 | +0.244 | 0.763 |
+
+More viewpoints → larger cooperative lift, tapering between 4 and 5 agents
+(+0.239 → +0.244). This shows the gain is *structured*, not a flat artifact: sparse
+scenes benefit modestly, dense multi-agent scenes benefit most, then saturate.
+
+**Caveat:** the 4- and 5-agent rows are small samples (14 and 17 frames) — directionally
+solid but statistically noisier than the 2/3-agent rows (102, 92 frames). The saturation
+shape is the takeaway, not the exact high-density values.
+
+---
+
+## Association method — Mahalanobis-gated (Task 3.5)
+
+Fusion association is **probabilistic, not a fixed distance threshold.** Each tracked
+entity carries a Kalman-filter 2×2 position covariance; a new observation associates only
+if its **Mahalanobis distance** against the innovation covariance `S = P + R` (R scaled by
+detection confidence) is within the χ²₂ 99% gate (9.21). Computed with Eigen (LDLT, no
+explicit inversion). A precisely-localized entity accepts only nearby detections; an
+uncertain entity accepts a wider spread — the correct multi-object-tracker behavior.
+
+Switching from the earlier fixed-5 m Euclidean gate to Mahalanobis gating **preserved the
+result** (gain +0.155 vs. the previous +0.157) while making the association principled.
+All 79 C++ unit tests pass.
+
+---
+
 ## Kill Gate A — verdict
 
 Kill Gate A required cooperation to show meaningful gain on this data. **PASSED:**
@@ -98,6 +135,7 @@ helps, measured through the real C++ fusion engine.
 - Cooperative "detections" use default car dimensions for fused entities (the world
   model tracks centers/confidence, not box extents yet) — a minor approximation for
   IoU; acceptable since IoU here is dominated by center proximity at these dims.
-- Next: per-agent-count breakdown (show the paper's ~4-agent saturation), then Phase 3
-  (trust layer + learned communication policy under realistic V2X constraints — the
-  project's core novelty), which does not depend on 2a.
+- Next: **Phase 3 trust layer** — down-weight disagreeing/low-quality agents in fusion
+  (byzantine-aware confirmation), then **Phase 5** (learned communication policy under
+  realistic V2X constraints — the project's core novelty), which does not depend on 2a.
+  (The per-agent-count saturation breakdown is DONE — see the density-scaling section.)
