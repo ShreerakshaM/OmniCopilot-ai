@@ -542,6 +542,29 @@ beyond it is additive.
 Rule: never start a later layer while an earlier layer's success criteria are unmet.
 Finishing Phases 1–5 well beats half-finishing all ten phases.
 
+### CURRENT PROGRESS (living status)
+
+| Phase | State | Evidence |
+|---|---|---|
+| Phase 1 — Foundation | ✅ DONE | Repo, C++/Python build (CMake+Ninja), CI, protobuf, prior-art scan (6 papers), pybind11 bridge. 73 C++ tests + Python unit tests pass. |
+| Task 3.0 — Coordinate frames | ✅ DONE | OPV2V transform validated against OpenCOOD source; a bug (pose double-applied) was found and fixed (`0f7dc3c`, `bdde5e4`). |
+| Phase 2 — Cooperative perception measured | ✅ DONE (via 2b) | **Result 03**: cooperation lifts mAP +0.157 (+63% rel.), recall 0.45→0.70, precision flat, 225 frames, 3 seeds stable. Kill Gate A PASSED. |
+| 2a — real detector | ⏸ DEFERRED | OpenCOOD/MMDet3D blocked by Kaggle Python 3.12 (spconv/mmcv). Documented upgrade: Python-3.10 env (Colab + data subset, or local GPU). Drop-in swap; downstream identical. |
+| Phase 3 — trust + fusion depth | ▶ NEXT | See scope below. |
+| Phase 5 — learned communication policy | ◻ CORE NOVELTY (not started) | The project's differentiated contribution. |
+
+Retracted/corrected: Results 01 and 02 originally reported inflated numbers (2.45×,
+2.38×) from the coordinate bug; both files now carry correction/retraction notices.
+Result 03 is the authoritative Phase 2 result.
+
+**Immediate next (Phase 3 scope):** (a) trust layer — down-weight disagreeing/low-quality
+agents in fusion (byzantine-aware confirmation); (b) per-agent-count breakdown of the
+Result-03 gain to show the paper's ~4-agent saturation; (c) Task 3.5 — let the Kalman
+filter own position fusion + Mahalanobis-gated association (replaces the fixed-radius
+Euclidean gate). None of these depend on 2a. The headline novelty remains Phase 5 (learned
+RL communication policy under realistic V2X constraints, per prior_art.md Tier-3 gap).
+
+
 ### Concrete Success Criteria (define targets BEFORE building)
 
 Each core claim needs a numeric target agreed in advance, so success is unambiguous and
