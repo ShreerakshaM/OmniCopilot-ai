@@ -64,14 +64,16 @@ def make_obs(oc: Any, agent_id: str, oid: str, xyz, conf: float, t: float) -> An
 
 
 def adversarial_detections(rng: np.random.Generator, gt_centers: np.ndarray,
-                           n_phantoms: int = 8, spread: float = 80.0,
+                           fixed_phantoms: np.ndarray,
                            sensor_xyz=(0.0, 0.0, 0.0)) -> np.ndarray:
-    """Adversary output: mostly PHANTOMS at plausible-but-wrong world locations, plus
-    heavily mislocalized versions of a few real objects. Returns (K,3) world centers."""
-    phantoms = np.array(sensor_xyz, dtype=np.float64) + rng.uniform(
-        -spread, spread, size=(n_phantoms, 3))
-    phantoms[:, 2] = 0.0
-    # A few real objects but shifted far enough to not corroborate (10-20 m off).
+    """Adversary output: FIXED phantom objects at consistent fake locations (a
+    persistent spoof), plus a few real objects shifted enough not to corroborate.
+
+    Using FIXED phantom locations (not fresh random scatter each frame) is important:
+    a consistent lie forms a stable single-source entity that never gets corroborated
+    by honest agents, so it is penalized cleanly -- rather than random scatter that
+    creates a churn of transient entities and pollutes the fused set indefinitely.
+    """
     fabricated = []
     if len(gt_centers) > 0:
         pick = rng.choice(len(gt_centers), size=min(3, len(gt_centers)), replace=False)
@@ -80,7 +82,7 @@ def adversarial_detections(rng: np.random.Generator, gt_centers: np.ndarray,
             shift[2] = 0.0
             fabricated.append(gt_centers[i] + shift)
     fabricated = np.array(fabricated, dtype=np.float64) if fabricated else np.zeros((0, 3))
-    return np.vstack([phantoms, fabricated]) if len(fabricated) else phantoms
+    return np.vstack([fixed_phantoms, fabricated]) if len(fabricated) else fixed_phantoms
 
 
 def run(oc: Any, data_root: Path, min_agents: int, seed: int,
@@ -94,9 +96,6 @@ def run(oc: Any, data_root: Path, min_agents: int, seed: int,
 
     ds = OPV2VDataset(data_root)
     ds.load()
-    sids = ds.scenario_ids()
-    if max_scenarios is not None:
-        sids = sids[:max_scenarios]
 
     honest = SimulatedDetector(DetectorNoiseConfig(), seed=seed)
     rng = np.random.default_rng(seed + 999)
@@ -105,13 +104,45 @@ def run(oc: Any, data_root: Path, min_agents: int, seed: int,
         cfg = oc.WorldModelConfig()
         cfg.max_entities = 4000
         cfg.fusion.association_max_distance_m = assoc_radius
+        # Faster trust adaptation so decay is visible within one scenario's frames.
+        cfg.reliability.trust_ema_alpha = 0.15
+        cfg.reliability.calibration_period = 5
         if not with_trust:
-            # Disable adaptation: freeze trust at its initial value by making the
-            # EMA inert and the floor == ceiling == initial.
+            # Freeze trust at its initial value (adversary weighted like everyone).
             cfg.reliability.trust_ema_alpha = 0.0
             cfg.reliability.min_trust = cfg.reliability.initial_trust
             cfg.reliability.max_trust = cfg.reliability.initial_trust
         return oc.WorldModel(cfg)
+
+    # Pick ONE scenario with enough agents and the most frames -- a single coherent
+    # scene. Accumulating across DIFFERENT scenarios would be wrong (different world
+    # coords, different agent IDs), and the "adversary" must be ONE fixed agent whose
+    # trust accumulates over time.
+    chosen = None
+    for sid in ds.scenario_ids():
+        sc = ds.get_scenario(sid)
+        if len(sc.agent_ids) >= min_agents:
+            if chosen is None or len(sc.frame_indices) > len(
+                    ds.get_scenario(chosen).frame_indices):
+                chosen = sid
+    if chosen is None:
+        msg = f"No scenario with >= {min_agents} agents."
+        raise RuntimeError(msg)
+
+    sc = ds.get_scenario(chosen)
+    adversary_id = sc.agent_ids[-1]          # ONE fixed adversary for the whole run
+    honest_ids = [a for a in sc.agent_ids if a != adversary_id]
+
+    # The adversary's FIXED phantom objects: consistent fake locations near the
+    # adversary's starting position, established once so the spoof is persistent.
+    adv_start = np.zeros(3)
+    first_frames = ds.get_all_agent_frames(chosen, sc.frame_indices[0], load_lidar=False)
+    if adversary_id in first_frames:
+        p = np.asarray(first_frames[adversary_id].pose)
+        if p.shape == (4, 4):
+            adv_start = p[:3, 3]
+    fixed_phantoms = adv_start + rng.uniform(-60.0, 60.0, size=(8, 3))
+    fixed_phantoms[:, 2] = 0.0
 
     wm_trust = build_wm(with_trust=True)
     wm_notrust = build_wm(with_trust=False)
@@ -120,82 +151,67 @@ def run(oc: Any, data_root: Path, min_agents: int, seed: int,
     coop_trust: list[np.ndarray] = []
     coop_notrust: list[np.ndarray] = []
     adversary_trust_trace: list[float] = []
+    honest_trust_trace: list[float] = []
 
     step_t = 1.0
-    frame_no = 0
-    for sid in sids:
-        sc = ds.get_scenario(sid)
-        if len(sc.agent_ids) < min_agents:
-            continue
-        for fi in sc.frame_indices[::10]:
-            frames = ds.get_all_agent_frames(sid, fi, load_lidar=False)
-            # Ground-truth boxes (union) for scoring.
-            all_centers = []
-            for fr in frames.values():
-                all_centers.append(fr.gt_locations_world())
-            gt_union = _dedupe(np.vstack(all_centers)) if all_centers else np.zeros((0, 3))
-            gt7 = np.hstack([gt_union, np.tile([4.5, 2.0, 1.5, 0.0], (len(gt_union), 1))]) \
-                if len(gt_union) else np.zeros((0, 7))
+    for frame_no, fi in enumerate(sc.frame_indices):
+        frames = ds.get_all_agent_frames(chosen, fi, load_lidar=False)
 
-            # Honest agents' detections.
-            per_agent = {}
-            sensor_positions = {}
-            for aid, fr in frames.items():
-                centers = fr.gt_locations_world()
-                dims = np.array([o.dimensions for o in fr.gt_objects]) if fr.gt_objects \
-                    else np.zeros((0, 3))
-                yaws = np.array([o.yaw_rad for o in fr.gt_objects]) if fr.gt_objects \
-                    else np.zeros(0)
-                sxyz = np.asarray(fr.pose)[:3, 3] if np.asarray(fr.pose).shape == (4, 4) \
-                    else np.zeros(3)
-                sensor_positions[aid] = sxyz
-                per_agent[aid] = honest.detect(centers, dims, yaws, sxyz)
+        # This frame's GT (union across agents, deduped) for scoring.
+        all_centers = [fr.gt_locations_world() for fr in frames.values()]
+        gt_union = _dedupe(np.vstack(all_centers)) if all_centers else np.zeros((0, 3))
+        gt7 = np.hstack([gt_union, np.tile([4.5, 2.0, 1.5, 0.0], (len(gt_union), 1))]) \
+            if len(gt_union) else np.zeros((0, 7))
 
-            # Turn the LAST agent into the adversary: replace its detections.
-            adversary_id = list(frames.keys())[-1]
-            adv_centers = adversarial_detections(
-                rng, gt_union, sensor_xyz=sensor_positions[adversary_id])
+        # Honest agents' simulated detections; remember sensor positions.
+        per_agent = {}
+        sensor_positions = {}
+        for aid, fr in frames.items():
+            sxyz = np.asarray(fr.pose)[:3, 3] if np.asarray(fr.pose).shape == (4, 4) \
+                else np.zeros(3)
+            sensor_positions[aid] = sxyz
+            if aid == adversary_id:
+                continue
+            centers = fr.gt_locations_world()
+            dims = np.array([o.dimensions for o in fr.gt_objects]) if fr.gt_objects \
+                else np.zeros((0, 3))
+            yaws = np.array([o.yaw_rad for o in fr.gt_objects]) if fr.gt_objects \
+                else np.zeros(0)
+            per_agent[aid] = honest.detect(centers, dims, yaws, sxyz)
 
-            step_t += 1.0
-            # Feed both world models identically.
-            for wm, store in ((wm_trust, coop_trust), (wm_notrust, coop_notrust)):
-                # honest agents
-                for aid, dets in per_agent.items():
-                    if aid == adversary_id:
-                        continue
-                    for j, d in enumerate(dets):
-                        wm.ingest_observations(
-                            [make_obs(oc, aid, f"{aid}_{frame_no}_{j}", d.position,
-                                      d.confidence, step_t)], 0.9)
-                # adversary (high self-reported confidence -- it "believes" its lies)
-                for j, c in enumerate(adv_centers):
+        adv_centers = adversarial_detections(
+            rng, gt_union, fixed_phantoms,
+            sensor_xyz=sensor_positions.get(adversary_id, (0, 0, 0)))
+
+        step_t += 0.1  # ~10 Hz, realistic frame cadence
+        for wm, store in ((wm_trust, coop_trust), (wm_notrust, coop_notrust)):
+            for aid, dets in per_agent.items():
+                for j, d in enumerate(dets):
                     wm.ingest_observations(
-                        [make_obs(oc, adversary_id, f"{adversary_id}_{frame_no}_{j}",
-                                  c, 0.9, step_t)], 0.9)
-                wm.tick(step_t + 0.1)
-                # collect fused entities as predictions
-                rows = [[e.position.x, e.position.y, e.position.z, 4.5, 2.0, 1.5, 0.0,
-                         float(e.confidence)] for e in wm.get_entities()]
-                store.append(np.array(rows) if rows else np.zeros((0, 8)))
+                        [make_obs(oc, aid, f"{aid}_{frame_no}_{j}", d.position,
+                                  d.confidence, step_t)], 0.9)
+            for j, c in enumerate(adv_centers):
+                wm.ingest_observations(
+                    [make_obs(oc, adversary_id, f"{adversary_id}_{frame_no}_{j}",
+                              c, 0.9, step_t)], 0.9)
+            wm.tick(step_t)
+            rows = [[e.position.x, e.position.y, e.position.z, 4.5, 2.0, 1.5, 0.0,
+                     float(e.confidence)] for e in wm.get_entities()]
+            store.append(np.array(rows) if rows else np.zeros((0, 8)))
 
-            gts.append(gt7)
-            adversary_trust_trace.append(wm_trust.get_agent_trust(adversary_id))
-            frame_no += 1
+        gts.append(gt7)
+        adversary_trust_trace.append(wm_trust.get_agent_trust(adversary_id))
+        honest_trust_trace.append(wm_trust.get_agent_trust(honest_ids[0]))
 
     thr = np.array([0.5, 0.7])
     m_trust = compute_map(coop_trust, gts, iou_thresholds=thr)
     m_notrust = compute_map(coop_notrust, gts, iou_thresholds=thr)
-
-    # A representative honest agent's final trust for contrast.
-    honest_final = None
-    for sid in sids:
-        sc = ds.get_scenario(sid)
-        if len(sc.agent_ids) >= min_agents:
-            honest_final = wm_trust.get_agent_trust(sc.agent_ids[0])
-            break
+    honest_final = honest_trust_trace[-1] if honest_trust_trace else None
 
     return {
-        "frames": frame_no,
+        "scenario": chosen,
+        "adversary_id": adversary_id,
+        "frames": len(gts),
         "adversary_trust_start": round(adversary_trust_trace[0], 4) if adversary_trust_trace else None,
         "adversary_trust_end": round(adversary_trust_trace[-1], 4) if adversary_trust_trace else None,
         "adversary_trust_min": round(min(adversary_trust_trace), 4) if adversary_trust_trace else None,
