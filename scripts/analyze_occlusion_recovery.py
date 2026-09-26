@@ -49,11 +49,16 @@ if _PY_ROOT.is_dir() and str(_PY_ROOT) not in sys.path:
     sys.path.insert(0, str(_PY_ROOT))
 
 
-def run(data_root: Path, tolerance_m: float, frame_stride: int,
-        min_agents: int, max_scenarios: int | None) -> dict:
+def run(
+    data_root: Path,
+    tolerance_m: float,
+    frame_stride: int,
+    min_agents: int,
+    max_scenarios: int | None,
+) -> dict:
     """Aggregate occluded-object recovery across sampled multi-agent frames."""
-    from omnicopilot.data.opv2v import OPV2VDataset  # noqa: PLC0415
-    from omnicopilot.perception.occlusion import frame_recovery  # noqa: PLC0415
+    from omnicopilot.data.opv2v import OPV2VDataset
+    from omnicopilot.perception.occlusion import frame_recovery
 
     ds = OPV2VDataset(data_root)
     ds.load()
@@ -80,7 +85,8 @@ def run(data_root: Path, tolerance_m: float, frame_stride: int,
                 # spots to recover) -- they carry no information about recovery.
                 if stats.num_agents >= min_agents:
                     per_agentcount[stats.num_agents].append(
-                        stats.recovery_rate)  # rate is 0 with 0 missed; keep for honesty
+                        stats.recovery_rate
+                    )  # rate is 0 with 0 missed; keep for honesty
                 continue
             all_rates.append(stats.recovery_rate)
             all_missed.append(stats.mean_missed)
@@ -113,16 +119,21 @@ def main() -> None:
     """CLI entry point."""
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--data-root", type=Path, required=True)
-    p.add_argument("--tolerance", type=float, default=2.5,
-                   help="Cross-agent matching tolerance (m); use the sweep knee")
+    p.add_argument(
+        "--tolerance",
+        type=float,
+        default=2.5,
+        help="Cross-agent matching tolerance (m); use the sweep knee",
+    )
     p.add_argument("--frame-stride", type=int, default=10)
     p.add_argument("--min-agents", type=int, default=2)
     p.add_argument("--max-scenarios", type=int, default=None)
     p.add_argument("--out", type=Path, default=None)
     args = p.parse_args()
 
-    summary = run(args.data_root, args.tolerance, args.frame_stride,
-                  args.min_agents, args.max_scenarios)
+    summary = run(
+        args.data_root, args.tolerance, args.frame_stride, args.min_agents, args.max_scenarios
+    )
 
     print("=" * 66)
     print("OCCLUDED-OBJECT RECOVERY — cooperation's blind-spot value")
@@ -132,9 +143,11 @@ def main() -> None:
     print(f"Mean objects an ego MISSES alone:   {summary['mean_missed_per_ego']}")
     print(f"Mean of those RECOVERED by fleet:   {summary['mean_recovered_per_ego']}")
     print("-" * 66)
-    print(f"HEADLINE — mean occluded-object recovery rate: "
-          f"{summary['mean_recovery_rate']:.1%} "
-          f"(median {summary['median_recovery_rate']:.1%})")
+    print(
+        f"HEADLINE — mean occluded-object recovery rate: "
+        f"{summary['mean_recovery_rate']:.1%} "
+        f"(median {summary['median_recovery_rate']:.1%})"
+    )
     print("-" * 66)
     print("Recovery rate by agent count:")
     for k, v in summary["recovery_rate_by_agent_count"].items():

@@ -101,7 +101,6 @@ class PointPillarsDetector(BaseDetector):
         return ["vehicle", "pedestrian", "cyclist"]
 
 
-
 # ─── OpenCOOD single-agent detector (Phase 2 — inference only, no training) ──────
 #
 # This is the chosen Phase 2 detector (see docs/task_2.1_detector_integration_spec.md).
@@ -158,8 +157,8 @@ class OpenCOODDetector(BaseDetector):
         self._checkpoint_path = checkpoint_path
         self._device = device
         self._score_threshold = score_threshold
-        self._model: Any = None       # lazy-loaded torch model
-        self._hypes: Any = None        # OpenCOOD parsed config dict
+        self._model: Any = None  # lazy-loaded torch model
+        self._hypes: Any = None  # OpenCOOD parsed config dict
 
     # ── Model loading (GPU-only; fill in on Kaggle) ──────────────────────────
     def _lazy_load_model(self) -> None:
@@ -171,15 +170,14 @@ class OpenCOODDetector(BaseDetector):
         if self._model is not None:
             return
 
-        import sys  # noqa: PLC0415
+        import sys
 
         if self._repo not in sys.path:
             sys.path.insert(0, self._repo)
 
         # NOTE: import OpenCOOD modules directly — do NOT `pip install` the repo.
-        import torch  # noqa: PLC0415
-        from opencood.hypes_yaml.yaml_utils import load_yaml  # noqa: PLC0415
-        from opencood.tools import train_utils  # noqa: PLC0415
+        from opencood.hypes_yaml.yaml_utils import load_yaml
+        from opencood.tools import train_utils
 
         self._hypes = load_yaml(self._config_path)
         # build_model / load_saved_model are OpenCOOD's standard entrypoints.
@@ -204,12 +202,8 @@ class OpenCOODDetector(BaseDetector):
             the caller transforms to world frame via the agent pose (loader's
             validated pose @ location), exactly as feed_observations_demo.py does.
         """
-        import time  # noqa: PLC0415
-
         self._lazy_load_model()
-        points = np.asarray(sensor_data["lidar_points"], dtype=np.float32).reshape(-1, 4)
-
-        t0 = time.perf_counter()
+        _points = np.asarray(sensor_data["lidar_points"], dtype=np.float32).reshape(-1, 4)
         # TODO (Kaggle GPU): preprocess `points` into the model's expected batch dict
         # using OpenCOOD's preprocessor from self._hypes, run forward under no_grad,
         # and post-process to (boxes_7, scores). Pseudocode:
@@ -271,8 +265,7 @@ class OpenCOODDetector(BaseDetector):
         if not dets:
             return np.zeros((0, 8), dtype=np.float64)
         rows = [
-            [*d.position.tolist(), *d.dimensions.tolist(), d.heading, d.confidence]
-            for d in dets
+            [*d.position.tolist(), *d.dimensions.tolist(), d.heading, d.confidence] for d in dets
         ]
         return np.asarray(rows, dtype=np.float64)
 

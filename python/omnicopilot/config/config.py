@@ -88,9 +88,7 @@ class ExperimentConfig:
     perception: PerceptionConfig = field(default_factory=PerceptionConfig)
     fusion: FusionConfig = field(default_factory=FusionConfig)
     communication: CommunicationConfig = field(default_factory=CommunicationConfig)
-    active_acquisition: ActiveAcquisitionConfig = field(
-        default_factory=ActiveAcquisitionConfig
-    )
+    active_acquisition: ActiveAcquisitionConfig = field(default_factory=ActiveAcquisitionConfig)
     trust: TrustConfig = field(default_factory=TrustConfig)
 
     # Output.

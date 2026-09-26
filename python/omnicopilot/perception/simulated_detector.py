@@ -39,31 +39,30 @@ class DetectorNoiseConfig:
     """Calibrated detection-degradation parameters (see module docstring)."""
 
     # Localization noise (Gaussian), std dev.
-    pos_noise_std_m: float = 0.2          # within V2X-ViT [0, 0.5] m
-    heading_noise_std_deg: float = 0.5    # within V2X-ViT [0, 1] deg
+    pos_noise_std_m: float = 0.2  # within V2X-ViT [0, 0.5] m
+    heading_noise_std_deg: float = 0.5  # within V2X-ViT [0, 1] deg
 
     # Detection dropout: base miss rate + range/occlusion-driven increase.
-    base_miss_rate: float = 0.05          # even near, clear objects occasionally missed
-    range_full_miss_m: float = 100.0      # miss prob approaches high near this range
-    max_range_miss_rate: float = 0.85     # miss prob at/after range_full_miss_m
+    base_miss_rate: float = 0.05  # even near, clear objects occasionally missed
+    range_full_miss_m: float = 100.0  # miss prob approaches high near this range
+    max_range_miss_rate: float = 0.85  # miss prob at/after range_full_miss_m
     # Occlusion proxy: an object with many nearer neighbors between it and the
     # sensor is more likely occluded. We approximate with local crowding.
-    occlusion_miss_boost: float = 0.30    # extra miss prob for highly-crowded objects
+    occlusion_miss_boost: float = 0.30  # extra miss prob for highly-crowded objects
 
     # False positives.
-    false_positive_rate: float = 0.03     # expected FPs per true object
-    fp_spread_m: float = 60.0             # FPs scattered within this radius of sensor
+    false_positive_rate: float = 0.03  # expected FPs per true object
+    fp_spread_m: float = 60.0  # FPs scattered within this radius of sensor
 
     # Confidence model: score decreases with range + noise.
     conf_base: float = 0.95
-    conf_range_falloff: float = 0.4       # score reduction at range_full_miss_m
+    conf_range_falloff: float = 0.4  # score reduction at range_full_miss_m
 
 
 class SimulatedDetector:
     """Turns ground-truth objects (world frame) into noisy per-agent detections."""
 
-    def __init__(self, config: DetectorNoiseConfig | None = None,
-                 seed: int | None = None) -> None:
+    def __init__(self, config: DetectorNoiseConfig | None = None, seed: int | None = None) -> None:
         """Initialize.
 
         Args:
@@ -73,8 +72,9 @@ class SimulatedDetector:
         self.cfg = config or DetectorNoiseConfig()
         self._rng = np.random.default_rng(seed)
 
-    def _miss_probability(self, ranges: npt.NDArray[np.float64],
-                          crowding: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    def _miss_probability(
+        self, ranges: npt.NDArray[np.float64], crowding: npt.NDArray[np.float64]
+    ) -> npt.NDArray[np.float64]:
         """Per-object probability of being MISSED, from range + occlusion proxy."""
         c = self.cfg
         # Range term: linear ramp from base_miss_rate to max_range_miss_rate.
@@ -85,8 +85,9 @@ class SimulatedDetector:
         return np.clip(range_term + occ_term, 0.0, 0.99)
 
     @staticmethod
-    def _crowding(centers: npt.NDArray[np.float64], radius_m: float = 8.0
-                  ) -> npt.NDArray[np.float64]:
+    def _crowding(
+        centers: npt.NDArray[np.float64], radius_m: float = 8.0
+    ) -> npt.NDArray[np.float64]:
         """Normalized local crowding per object (occlusion proxy), in [0, 1]."""
         n = centers.shape[0]
         if n <= 1:
@@ -101,10 +102,10 @@ class SimulatedDetector:
 
     def detect(
         self,
-        gt_centers_world: npt.NDArray[np.float64],   # (M, 3)
-        gt_dims: npt.NDArray[np.float64],            # (M, 3) l, w, h
-        gt_yaw: npt.NDArray[np.float64],             # (M,)
-        sensor_xyz: npt.NDArray[np.float64],         # (3,) agent world position
+        gt_centers_world: npt.NDArray[np.float64],  # (M, 3)
+        gt_dims: npt.NDArray[np.float64],  # (M, 3) l, w, h
+        gt_yaw: npt.NDArray[np.float64],  # (M,)
+        sensor_xyz: npt.NDArray[np.float64],  # (3,) agent world position
     ) -> list[Detection3D]:
         """Produce noisy detections for one agent viewing the scene from sensor_xyz."""
         gt_centers_world = np.asarray(gt_centers_world, dtype=np.float64).reshape(-1, 3)
@@ -142,9 +143,9 @@ class SimulatedDetector:
             )
         return self._add_false_positives(dets, sensor_xyz, m)
 
-    def _add_false_positives(self, dets: list[Detection3D],
-                             sensor_xyz: npt.NDArray[np.float64], n_true: int
-                             ) -> list[Detection3D]:
+    def _add_false_positives(
+        self, dets: list[Detection3D], sensor_xyz: npt.NDArray[np.float64], n_true: int
+    ) -> list[Detection3D]:
         """Sprinkle a few low-confidence phantom detections near the sensor."""
         c = self.cfg
         n_fp = self._rng.poisson(c.false_positive_rate * max(n_true, 1))

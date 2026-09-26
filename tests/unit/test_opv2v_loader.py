@@ -7,8 +7,6 @@ math and data structures that were empirically confirmed against real OPV2V data
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
 
 from omnicopilot.data.opv2v import (
@@ -106,10 +104,12 @@ class TestCrossAgentMatching:
 
         # A physical car at WORLD (5, 0, 0) — both agents report it in world coords,
         # with a small localization difference (5.0 vs 5.4) that must still match.
-        obj0 = GroundTruthObject("k0", "Car", np.array([5.0, 0.0, 0.0]),
-                                 np.array([4.5, 2.0, 1.5]), 0.0)
-        obj1 = GroundTruthObject("k9", "Car", np.array([5.4, 0.2, 0.0]),
-                                 np.array([4.5, 2.0, 1.5]), 0.0)
+        obj0 = GroundTruthObject(
+            "k0", "Car", np.array([5.0, 0.0, 0.0]), np.array([4.5, 2.0, 1.5]), 0.0
+        )
+        obj1 = GroundTruthObject(
+            "k9", "Car", np.array([5.4, 0.2, 0.0]), np.array([4.5, 2.0, 1.5]), 0.0
+        )
 
         frames = {
             "0": self._make_frame("0", pose0, [obj0]),
@@ -128,10 +128,12 @@ class TestCrossAgentMatching:
         pose1[:3, 3] = [100.0, 0.0, 0.0]  # pose is metadata only now
 
         # World-frame locations that are genuinely far apart -> not the same object.
-        obj0 = GroundTruthObject("a", "Car", np.array([1.0, 0.0, 0.0]),
-                                 np.array([4.5, 2.0, 1.5]), 0.0)
-        obj1 = GroundTruthObject("b", "Car", np.array([101.0, 0.0, 0.0]),
-                                 np.array([4.5, 2.0, 1.5]), 0.0)
+        obj0 = GroundTruthObject(
+            "a", "Car", np.array([1.0, 0.0, 0.0]), np.array([4.5, 2.0, 1.5]), 0.0
+        )
+        obj1 = GroundTruthObject(
+            "b", "Car", np.array([101.0, 0.0, 0.0]), np.array([4.5, 2.0, 1.5]), 0.0
+        )
 
         frames = {
             "0": self._make_frame("0", pose0, [obj0]),
@@ -153,8 +155,9 @@ class TestGroundTruthWorld:
         """
         pose = np.identity(4)
         pose[:3, 3] = [100.0, 200.0, 0.0]  # non-trivial translation
-        obj = GroundTruthObject("k", "Car", np.array([5.0, 0.0, 0.0]),
-                                np.array([4.5, 2.0, 1.5]), 0.0)
+        obj = GroundTruthObject(
+            "k", "Car", np.array([5.0, 0.0, 0.0]), np.array([4.5, 2.0, 1.5]), 0.0
+        )
         frame = OPV2VFrame("s", "0", 0, 0.0, pose, gt_objects=[obj])
         world = frame.gt_locations_world()
         # World location equals the stored location, independent of pose.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from omnicopilot.fusion.algorithms import FusedEstimate, WeightedAverageFusion
+from omnicopilot.fusion.algorithms import WeightedAverageFusion
 
 
 class TestWeightedAverageFusion:

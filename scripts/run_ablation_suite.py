@@ -6,8 +6,6 @@ Usage:
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import typer
 
 app = typer.Typer()
@@ -30,12 +28,12 @@ def main(
         "no_temporal",
     ]
 
-    print(f"Running {len(ablation_components)} ablation experiments...")  # noqa: T201
+    print(f"Running {len(ablation_components)} ablation experiments...")
     for component in ablation_components:
-        print(f"  Ablation: {component}")  # noqa: T201
+        print(f"  Ablation: {component}")
         # TODO: Load config, disable component, run experiment, collect metrics.
 
-    print("Ablation suite complete. Results saved to:", output_dir)  # noqa: T201
+    print("Ablation suite complete. Results saved to:", output_dir)
 
 
 if __name__ == "__main__":

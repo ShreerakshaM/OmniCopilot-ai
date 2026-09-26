@@ -33,16 +33,14 @@ class RecoveryStats:
     """Occluded-object recovery for one frame (aggregated over candidate egos)."""
 
     num_agents: int
-    fleet_union_count: int          # distinct objects the whole fleet sees.
-    mean_ego_visible: float         # mean objects a single ego sees alone.
-    mean_missed: float              # mean objects an ego misses alone.
-    mean_recovered: float           # mean missed objects recovered via cooperation.
-    recovery_rate: float            # recovered / missed (0..1).
+    fleet_union_count: int  # distinct objects the whole fleet sees.
+    mean_ego_visible: float  # mean objects a single ego sees alone.
+    mean_missed: float  # mean objects an ego misses alone.
+    mean_recovered: float  # mean missed objects recovered via cooperation.
+    recovery_rate: float  # recovered / missed (0..1).
 
 
-def cluster_world_points(
-    points: npt.NDArray[np.float64], tolerance_m: float
-) -> list[list[int]]:
+def cluster_world_points(points: npt.NDArray[np.float64], tolerance_m: float) -> list[list[int]]:
     """Greedy single-linkage-ish clustering of world-frame centers by distance.
 
     Args:

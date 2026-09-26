@@ -48,7 +48,7 @@ def import_cpp_module(module_dir: str | None) -> Any:
     if module_dir:
         sys.path.insert(0, module_dir)
     try:
-        import _omnicopilot_cpp as oc  # noqa: PLC0415
+        import _omnicopilot_cpp as oc
     except ImportError as e:
         msg = (
             "Could not import _omnicopilot_cpp. Build it first:\n"
@@ -124,8 +124,9 @@ def debug_one_frame(oc: Any, ds: Any, sid: str, fi: int, radius: float) -> None:
     enough to associate, or whether association/greedy assignment is the problem —
     rather than guessing.
     """
-    import numpy as np  # noqa: PLC0415
-    from omnicopilot.data.opv2v import OPV2VDataset, transform_points  # noqa: PLC0415
+    import numpy as np
+
+    from omnicopilot.data.opv2v import OPV2VDataset, transform_points
 
     frames = ds.get_all_agent_frames(sid, fi, load_lidar=False)
     per_agent = {aid: len(f.gt_objects) for aid, f in frames.items()}
@@ -136,8 +137,10 @@ def debug_one_frame(oc: Any, ds: Any, sid: str, fi: int, radius: float) -> None:
     for tol in (2.0, 3.0, 5.0):
         groups = OPV2VDataset.match_objects_across_agents(frames, tolerance_m=tol)
         multi = [g for g in groups if len(g) >= 2]
-        print(f"[DEBUG] loader matcher tol={tol}m: {len(groups)} distinct objects, "
-              f"{len(multi)} seen by >=2 agents")
+        print(
+            f"[DEBUG] loader matcher tol={tol}m: {len(groups)} distinct objects, "
+            f"{len(multi)} seen by >=2 agents"
+        )
 
     # 2) Feed through C++ exactly as the sweep does, report entities/confirmed.
     e, c, b = fuse_frame(oc, frames, radius, 0.9)
@@ -192,8 +195,10 @@ def debug_one_frame(oc: Any, ds: Any, sid: str, fi: int, radius: float) -> None:
 
     print("[DEBUG] --- transform hypothesis test (matches at tol=3.0m) ---")
     h1 = {aid: f.gt_locations_world() for aid, f in frames.items()}  # pose @ location
-    h2 = {aid: np.array([o.location_world for o in f.gt_objects], dtype=np.float64)
-          for aid, f in frames.items()}                              # location as-is
+    h2 = {
+        aid: np.array([o.location_world for o in f.gt_objects], dtype=np.float64)
+        for aid, f in frames.items()
+    }  # location as-is
     h3 = {}
     for aid, f in frames.items():
         inv = np.linalg.inv(f.pose)
@@ -214,7 +219,7 @@ def run_sweep(
     agent_trust: float,
 ) -> dict:
     """Run the radius sweep across sampled frames."""
-    from omnicopilot.data.opv2v import OPV2VDataset  # noqa: PLC0415
+    from omnicopilot.data.opv2v import OPV2VDataset
 
     ds = OPV2VDataset(data_root)
     ds.load()
@@ -268,24 +273,34 @@ def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-root", type=Path, required=True)
-    parser.add_argument("--module-dir", type=str, default=None,
-                        help="Dir containing built _omnicopilot_cpp (build/cpp)")
+    parser.add_argument(
+        "--module-dir",
+        type=str,
+        default=None,
+        help="Dir containing built _omnicopilot_cpp (build/cpp)",
+    )
     parser.add_argument("--radii", type=float, nargs="+", default=DEFAULT_RADII)
-    parser.add_argument("--frame-stride", type=int, default=20,
-                        help="Subsample every Nth common frame per scenario")
+    parser.add_argument(
+        "--frame-stride", type=int, default=20, help="Subsample every Nth common frame per scenario"
+    )
     parser.add_argument("--min-agents", type=int, default=3)
     parser.add_argument("--agent-trust", type=float, default=0.9)
-    parser.add_argument("--out", type=Path, default=None,
-                        help="Optional JSON output path for the sweep table")
-    parser.add_argument("--debug-frame", action="store_true",
-                        help="Dump diagnostics for ONE real frame (why association "
-                             "behaves as it does) instead of running the full sweep")
+    parser.add_argument(
+        "--out", type=Path, default=None, help="Optional JSON output path for the sweep table"
+    )
+    parser.add_argument(
+        "--debug-frame",
+        action="store_true",
+        help="Dump diagnostics for ONE real frame (why association "
+        "behaves as it does) instead of running the full sweep",
+    )
     args = parser.parse_args()
 
     oc = import_cpp_module(args.module_dir)
 
     if args.debug_frame:
-        from omnicopilot.data.opv2v import OPV2VDataset  # noqa: PLC0415
+        from omnicopilot.data.opv2v import OPV2VDataset
+
         ds = OPV2VDataset(args.data_root)
         ds.load()
         # Pick the first scenario with >= min_agents agents.
@@ -310,8 +325,10 @@ def main() -> None:
         args.out.write_text(json.dumps(summary, indent=2))
         print(f"\nWrote sweep table -> {args.out}")
 
-    print("\nPick the radius at the knee: where mean_entities flattens near the true "
-          "distinct-object count while mean_confirmed stays high.")
+    print(
+        "\nPick the radius at the knee: where mean_entities flattens near the true "
+        "distinct-object count while mean_confirmed stays high."
+    )
 
 
 if __name__ == "__main__":

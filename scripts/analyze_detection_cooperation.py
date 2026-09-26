@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import statistics
 import sys
 from pathlib import Path
 from typing import Any
@@ -44,13 +43,14 @@ def import_cpp(module_dir: str | None) -> Any:
     """Import the compiled C++ world-model module."""
     if module_dir:
         sys.path.insert(0, module_dir)
-    import _omnicopilot_cpp as oc  # noqa: PLC0415
+    import _omnicopilot_cpp as oc
+
     return oc
 
 
 def gt_boxes_for_frame(frames: dict) -> np.ndarray:
     """Union of all agents' GT as (K,7) x,y,z,l,w,h,yaw, deduplicated by proximity."""
-    from omnicopilot.data.opv2v import OPV2VDataset  # noqa: PLC0415
+    from omnicopilot.data.opv2v import OPV2VDataset
 
     groups = OPV2VDataset.match_objects_across_agents(frames, tolerance_m=2.0)
     # For each matched group, take one representative box (from the first agent in it).
@@ -70,17 +70,26 @@ def gt_boxes_for_frame(frames: dict) -> np.ndarray:
 
 def detections_to_pred_array(dets: list) -> np.ndarray:
     """(N,8) x,y,z,l,w,h,heading,score from Detection3D list."""
-    from omnicopilot.perception.detector import OpenCOODDetector  # noqa: PLC0415
+    from omnicopilot.perception.detector import OpenCOODDetector
+
     return OpenCOODDetector.detections_to_boxes(dets)
 
 
-def run(oc: Any, data_root: Path, assoc_radius: float, frame_stride: int,
-        min_agents: int, seed: int, max_scenarios: int | None) -> dict:
+def run(
+    oc: Any,
+    data_root: Path,
+    assoc_radius: float,
+    frame_stride: int,
+    min_agents: int,
+    seed: int,
+    max_scenarios: int | None,
+) -> dict:
     """Compute single-agent vs cooperative AP across sampled frames."""
-    from omnicopilot.data.opv2v import OPV2VDataset  # noqa: PLC0415
-    from omnicopilot.evaluation.metrics import compute_map  # noqa: PLC0415
-    from omnicopilot.perception.simulated_detector import (  # noqa: PLC0415
-        DetectorNoiseConfig, SimulatedDetector,
+    from omnicopilot.data.opv2v import OPV2VDataset
+    from omnicopilot.evaluation.metrics import compute_map
+    from omnicopilot.perception.simulated_detector import (
+        DetectorNoiseConfig,
+        SimulatedDetector,
     )
 
     ds = OPV2VDataset(data_root)
@@ -111,12 +120,21 @@ def run(oc: Any, data_root: Path, assoc_radius: float, frame_stride: int,
             per_agent_dets = {}
             for aid, fr in frames.items():
                 centers = fr.gt_locations_world()
-                dims = np.array([o.dimensions for o in fr.gt_objects], dtype=np.float64) \
-                    if fr.gt_objects else np.zeros((0, 3))
-                yaws = np.array([o.yaw_rad for o in fr.gt_objects], dtype=np.float64) \
-                    if fr.gt_objects else np.zeros(0)
-                sensor_xyz = np.asarray(fr.pose, dtype=np.float64)[:3, 3] \
-                    if np.asarray(fr.pose).shape == (4, 4) else np.zeros(3)
+                dims = (
+                    np.array([o.dimensions for o in fr.gt_objects], dtype=np.float64)
+                    if fr.gt_objects
+                    else np.zeros((0, 3))
+                )
+                yaws = (
+                    np.array([o.yaw_rad for o in fr.gt_objects], dtype=np.float64)
+                    if fr.gt_objects
+                    else np.zeros(0)
+                )
+                sensor_xyz = (
+                    np.asarray(fr.pose, dtype=np.float64)[:3, 3]
+                    if np.asarray(fr.pose).shape == (4, 4)
+                    else np.zeros(3)
+                )
                 per_agent_dets[aid] = detector.detect(centers, dims, yaws, sensor_xyz)
 
             # (a) SINGLE-AGENT baseline: the agent that detected the most objects.
@@ -147,13 +165,23 @@ def run(oc: Any, data_root: Path, assoc_radius: float, frame_stride: int,
             fused = wm.get_entities()
             rows = []
             for e in fused:
-                rows.append([e.position.x, e.position.y, e.position.z,
-                             4.5, 2.0, 1.5, 0.0, float(e.confidence)])
-            coop_preds.append(np.array(rows, dtype=np.float64) if rows
-                              else np.zeros((0, 8)))
+                rows.append(
+                    [
+                        e.position.x,
+                        e.position.y,
+                        e.position.z,
+                        4.5,
+                        2.0,
+                        1.5,
+                        0.0,
+                        float(e.confidence),
+                    ]
+                )
+            coop_preds.append(np.array(rows, dtype=np.float64) if rows else np.zeros((0, 8)))
             gts.append(gt)
             bucket = by_agent_count.setdefault(
-                len(frames), {"single": [], "cooperative": [], "ground_truth": []})
+                len(frames), {"single": [], "cooperative": [], "ground_truth": []}
+            )
             bucket["single"].append(single_preds[-1])
             bucket["cooperative"].append(coop_preds[-1])
             bucket["ground_truth"].append(gt)
@@ -165,17 +193,15 @@ def run(oc: Any, data_root: Path, assoc_radius: float, frame_stride: int,
 
     breakdown = {}
     for agent_count, bucket in sorted(by_agent_count.items()):
-        single_count = compute_map(
-            bucket["single"], bucket["ground_truth"], iou_thresholds=thr)
-        coop_count = compute_map(
-            bucket["cooperative"], bucket["ground_truth"], iou_thresholds=thr)
+        single_count = compute_map(bucket["single"], bucket["ground_truth"], iou_thresholds=thr)
+        coop_count = compute_map(bucket["cooperative"], bucket["ground_truth"], iou_thresholds=thr)
         breakdown[str(agent_count)] = {
             "frames": len(bucket["ground_truth"]),
             "single_agent_map": round(single_count.mean_average_precision, 4),
             "cooperative_map": round(coop_count.mean_average_precision, 4),
             "absolute_map_gain": round(
-                coop_count.mean_average_precision -
-                single_count.mean_average_precision, 4),
+                coop_count.mean_average_precision - single_count.mean_average_precision, 4
+            ),
             "single_agent_recall": round(single_count.recall, 4),
             "cooperative_recall": round(coop_count.recall, 4),
         }
@@ -186,7 +212,7 @@ def run(oc: Any, data_root: Path, assoc_radius: float, frame_stride: int,
         "seed": seed,
         "frames": n_frames,
         "detector": "SimulatedDetector (GT + V2X-ViT-calibrated noise/dropout) "
-                    "-- NOT a neural network",
+        "-- NOT a neural network",
         "single_agent": {
             "mAP@[0.5,0.7]": round(single_m.mean_average_precision, 4),
             "precision": round(single_m.precision, 4),
@@ -198,7 +224,8 @@ def run(oc: Any, data_root: Path, assoc_radius: float, frame_stride: int,
             "recall": round(coop_m.recall, 4),
         },
         "absolute_map_gain": round(
-            coop_m.mean_average_precision - single_m.mean_average_precision, 4),
+            coop_m.mean_average_precision - single_m.mean_average_precision, 4
+        ),
         "agent_count_breakdown": breakdown,
     }
 
@@ -217,8 +244,15 @@ def main() -> None:
     args = p.parse_args()
 
     oc = import_cpp(args.module_dir)
-    summary = run(oc, args.data_root, args.assoc_radius, args.frame_stride,
-                  args.min_agents, args.seed, args.max_scenarios)
+    summary = run(
+        oc,
+        args.data_root,
+        args.assoc_radius,
+        args.frame_stride,
+        args.min_agents,
+        args.seed,
+        args.max_scenarios,
+    )
 
     print("=" * 68)
     print("PHASE 2 (2b) — COOPERATIVE GAIN UNDER SIMULATED DETECTION")
@@ -228,19 +262,25 @@ def main() -> None:
     print("-" * 68)
     s, c = summary["single_agent"], summary["cooperative"]
     print(f"{'':22} {'mAP':>8} {'precision':>10} {'recall':>8}")
-    print(f"{'Single agent (best)':22} {s['mAP@[0.5,0.7]']:>8} "
-          f"{s['precision']:>10} {s['recall']:>8}")
-    print(f"{'Cooperative (fused)':22} {c['mAP@[0.5,0.7]']:>8} "
-          f"{c['precision']:>10} {c['recall']:>8}")
+    print(
+        f"{'Single agent (best)':22} {s['mAP@[0.5,0.7]']:>8} {s['precision']:>10} {s['recall']:>8}"
+    )
+    print(
+        f"{'Cooperative (fused)':22} {c['mAP@[0.5,0.7]']:>8} {c['precision']:>10} {c['recall']:>8}"
+    )
     print("-" * 68)
     print(f"Absolute mAP gain from cooperation: {summary['absolute_map_gain']:+.4f}")
     print("\nPer-agent-count saturation:")
-    print(f"{'Agents':>8} {'Frames':>8} {'Single mAP':>12} "
-          f"{'Coop mAP':>10} {'Gain':>10} {'Coop recall':>12}")
+    print(
+        f"{'Agents':>8} {'Frames':>8} {'Single mAP':>12} "
+        f"{'Coop mAP':>10} {'Gain':>10} {'Coop recall':>12}"
+    )
     for count, row in summary["agent_count_breakdown"].items():
-        print(f"{count:>8} {row['frames']:>8} {row['single_agent_map']:>12.4f} "
-              f"{row['cooperative_map']:>10.4f} {row['absolute_map_gain']:>+10.4f} "
-              f"{row['cooperative_recall']:>12.4f}")
+        print(
+            f"{count:>8} {row['frames']:>8} {row['single_agent_map']:>12.4f} "
+            f"{row['cooperative_map']:>10.4f} {row['absolute_map_gain']:>+10.4f} "
+            f"{row['cooperative_recall']:>12.4f}"
+        )
     print("NOTE: simulated detector (GT + calibrated noise), not a CNN. See script docstring.")
 
     if args.out:

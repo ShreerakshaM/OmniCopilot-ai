@@ -21,7 +21,7 @@ def main(cfg: DictConfig) -> None:
     # 3. Run simulation loop.
     # 4. Evaluate metrics.
     # 5. Log to W&B.
-    print(f"Running experiment: {cfg.get('name', 'unknown')}")  # noqa: T201
+    print(f"Running experiment: {cfg.get('name', 'unknown')}")
 
 
 if __name__ == "__main__":

@@ -31,7 +31,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -42,7 +41,7 @@ def import_cpp_module(module_dir: str | None) -> Any:
     if module_dir:
         sys.path.insert(0, module_dir)
     try:
-        import _omnicopilot_cpp as oc  # noqa: PLC0415
+        import _omnicopilot_cpp as oc
     except ImportError as e:
         msg = (
             "Could not import _omnicopilot_cpp. Build it first:\n"
@@ -67,9 +66,15 @@ def _obj_class(oc: Any, obj_type: str) -> Any:
     return oc.ObjectClass.VEHICLE
 
 
-def build_observation(oc: Any, agent_id: str, obs_id: str,
-                      world_xyz: tuple[float, float, float],
-                      obj_type: str, confidence: float, timestamp_s: float) -> Any:
+def build_observation(
+    oc: Any,
+    agent_id: str,
+    obs_id: str,
+    world_xyz: tuple[float, float, float],
+    obj_type: str,
+    confidence: float,
+    timestamp_s: float,
+) -> Any:
     """Construct a C++ Observation in WORLD coordinates.
 
     NOTE: the C++ world model fuses in a single common frame. We pass world-frame
@@ -87,10 +92,11 @@ def build_observation(oc: Any, agent_id: str, obs_id: str,
     return obs
 
 
-def run_real(oc: Any, data_root: Path, scenario_id: str | None,
-             frame_idx: int | None, agent_trust: float) -> None:
+def run_real(
+    oc: Any, data_root: Path, scenario_id: str | None, frame_idx: int | None, agent_trust: float
+) -> None:
     """Feed one real OPV2V frame (all agents) through the C++ world model."""
-    from omnicopilot.data.opv2v import OPV2VDataset  # noqa: PLC0415
+    from omnicopilot.data.opv2v import OPV2VDataset
 
     ds = OPV2VDataset(data_root)
     ds.load()
@@ -121,9 +127,13 @@ def run_real(oc: Any, data_root: Path, scenario_id: str | None,
         single_agent_counts[aid] = len(frame.gt_objects)
         for i, (obj, wpos) in enumerate(zip(frame.gt_objects, world)):
             obs = build_observation(
-                oc, agent_id=aid, obs_id=f"{aid}_{fi}_{i}",
+                oc,
+                agent_id=aid,
+                obs_id=f"{aid}_{fi}_{i}",
                 world_xyz=(wpos[0], wpos[1], wpos[2]),
-                obj_type=obj.obj_type, confidence=0.9, timestamp_s=fi / 10.0,
+                obj_type=obj.obj_type,
+                confidence=0.9,
+                timestamp_s=fi / 10.0,
             )
             wm.ingest_observations([obs], agent_trust)
             total_obs += 1
@@ -131,8 +141,6 @@ def run_real(oc: Any, data_root: Path, scenario_id: str | None,
     wm.tick(fi / 10.0)  # advance the world model one tick
 
     stats = wm.get_stats()
-    entities = wm.get_entities()
-
     best_single = max(single_agent_counts.values()) if single_agent_counts else 0
 
     print("\n" + "=" * 60)
@@ -141,8 +149,10 @@ def run_real(oc: Any, data_root: Path, scenario_id: str | None,
     print(f"Per-agent GT object counts: {single_agent_counts}")
     print(f"Total observations fed:     {total_obs}")
     print(f"Best single agent saw:      {best_single} objects")
-    print(f"C++ fused entities:         {stats.total_entities} "
-          f"(confirmed={stats.confirmed}, tentative={stats.tentative})")
+    print(
+        f"C++ fused entities:         {stats.total_entities} "
+        f"(confirmed={stats.confirmed}, tentative={stats.tentative})"
+    )
     print(f"Mean fused confidence:      {stats.mean_confidence:.3f}")
     # NOTE: we deliberately do NOT print a "coverage gain vs best single agent" ratio
     # here. That ratio (fused_entities / best_single_raw_count) divides a DEDUPLICATED
@@ -150,12 +160,14 @@ def run_real(oc: Any, data_root: Path, scenario_id: str | None,
     # below 1.0 even when fusion is working correctly). For the correct cooperative
     # metric (single-agent AP vs. cooperative-fused AP, like-with-like), see
     # scripts/analyze_detection_cooperation.py and docs/results/03_detection_cooperation.md.
-    print("\nInterpretation: this demo shows the end-to-end plumbing -- real per-agent "
-          "objects\nflow through the pybind11 bridge into the C++ WorldModel, which "
-          "associates the\nsame physical object seen by multiple agents into single "
-          "confirmed entities and\nkeeps agent-exclusive objects separate. It is a "
-          "PIPELINE demo, not a benchmark;\nfor the quantitative cooperative result use "
-          "analyze_detection_cooperation.py.")
+    print(
+        "\nInterpretation: this demo shows the end-to-end plumbing -- real per-agent "
+        "objects\nflow through the pybind11 bridge into the C++ WorldModel, which "
+        "associates the\nsame physical object seen by multiple agents into single "
+        "confirmed entities and\nkeeps agent-exclusive objects separate. It is a "
+        "PIPELINE demo, not a benchmark;\nfor the quantitative cooperative result use "
+        "analyze_detection_cooperation.py."
+    )
 
 
 def run_synthetic(oc: Any, agent_trust: float) -> None:
@@ -186,27 +198,35 @@ def run_synthetic(oc: Any, agent_trust: float) -> None:
     print("Agent A saw: 2 objects (1 shared pedestrian + 1 car)")
     print("Agent B saw: 3 objects (1 shared pedestrian + 2 cars)")
     print("Best single agent: 3 objects")
-    print(f"C++ fused entities: {stats.total_entities} "
-          f"(expected 4 = 1 shared + 3 exclusive)")
+    print(f"C++ fused entities: {stats.total_entities} (expected 4 = 1 shared + 3 exclusive)")
     print(f"Confirmed (>=2 sources): {stats.confirmed} (expected 1 = the shared pedestrian)")
     print()
     for e in entities:
-        print(f"  {e.entity_id}: pos=({e.position.x:.1f},{e.position.y:.1f}) "
-              f"conf={e.confidence:.3f} sources={e.unique_source_count}")
+        print(
+            f"  {e.entity_id}: pos=({e.position.x:.1f},{e.position.y:.1f}) "
+            f"conf={e.confidence:.3f} sources={e.unique_source_count}"
+        )
     ok = stats.total_entities == 4 and stats.confirmed == 1
-    print(f"\n{'PASS' if ok else 'CHECK'}: fusion merged the shared object, kept "
-          f"exclusives separate.")
+    print(
+        f"\n{'PASS' if ok else 'CHECK'}: fusion merged the shared object, kept exclusives separate."
+    )
 
 
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--module-dir", type=str, default=None,
-                        help="Dir containing the built _omnicopilot_cpp module (build/cpp)")
-    parser.add_argument("--synthetic", action="store_true",
-                        help="Run the no-data synthetic smoke test")
-    parser.add_argument("--data-root", type=Path, default=None,
-                        help="OPV2V split dir (for real run)")
+    parser.add_argument(
+        "--module-dir",
+        type=str,
+        default=None,
+        help="Dir containing the built _omnicopilot_cpp module (build/cpp)",
+    )
+    parser.add_argument(
+        "--synthetic", action="store_true", help="Run the no-data synthetic smoke test"
+    )
+    parser.add_argument(
+        "--data-root", type=Path, default=None, help="OPV2V split dir (for real run)"
+    )
     parser.add_argument("--scenario", type=str, default=None)
     parser.add_argument("--frame", type=int, default=None)
     parser.add_argument("--agent-trust", type=float, default=0.9)

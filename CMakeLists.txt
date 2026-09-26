@@ -116,6 +116,9 @@ endif()
 find_package(Eigen3 3.3 QUIET NO_MODULE)
 if(NOT Eigen3_FOUND)
   include(FetchContent)
+  # Eigen's upstream test suite is not part of this project and should not be
+  # registered with our CTest invocation.
+  set(EIGEN_BUILD_TESTING OFF CACHE BOOL "" FORCE)
   FetchContent_Declare(
     eigen
     GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git

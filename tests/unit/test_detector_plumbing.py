@@ -26,10 +26,12 @@ def _make_detector(score_threshold=0.3):
 
 def test_to_detections_filters_by_score():
     det = _make_detector(score_threshold=0.5)
-    boxes = np.array([
-        [0, 0, 0, 4, 2, 1.5, 0.0],
-        [10, 0, 0, 4, 2, 1.5, 0.0],
-    ])
+    boxes = np.array(
+        [
+            [0, 0, 0, 4, 2, 1.5, 0.0],
+            [10, 0, 0, 4, 2, 1.5, 0.0],
+        ]
+    )
     scores = np.array([0.9, 0.2])  # second below threshold
     out = det._to_detections(boxes, scores)
     assert len(out) == 1
@@ -65,7 +67,7 @@ def test_detector_output_feeds_compute_map():
     boxes = np.array([[0, 0, 0, 4, 2, 1.5, 0.0]])
     scores = np.array([0.9])
     dets = det._to_detections(boxes, scores)
-    preds = [OpenCOODDetector.detections_to_boxes(dets)]           # (1,8)
-    gt = [np.array([[0, 0, 0, 4, 2, 1.5, 0.0]])]                    # (1,7) same object
+    preds = [OpenCOODDetector.detections_to_boxes(dets)]  # (1,8)
+    gt = [np.array([[0, 0, 0, 4, 2, 1.5, 0.0]])]  # (1,7) same object
     m = compute_map(preds, gt, iou_thresholds=np.array([0.7]))
     assert abs(m.mean_average_precision - 1.0) < 1e-6

@@ -12,8 +12,7 @@ from omnicopilot.perception.simulated_detector import (
 
 def _grid(n, spacing=6.0, base=(10.0, 0.0, 0.0)):
     """n objects in a line starting at base, spaced along x."""
-    return np.array([[base[0] + i * spacing, base[1], base[2]] for i in range(n)],
-                    dtype=np.float64)
+    return np.array([[base[0] + i * spacing, base[1], base[2]] for i in range(n)], dtype=np.float64)
 
 
 def _dims(n):
@@ -22,10 +21,10 @@ def _dims(n):
 
 def test_near_objects_mostly_detected():
     # No dropout except the range ramp; objects close to sensor -> high detection.
-    det = SimulatedDetector(DetectorNoiseConfig(base_miss_rate=0.0,
-                                                occlusion_miss_boost=0.0,
-                                                false_positive_rate=0.0),
-                            seed=0)
+    det = SimulatedDetector(
+        DetectorNoiseConfig(base_miss_rate=0.0, occlusion_miss_boost=0.0, false_positive_rate=0.0),
+        seed=0,
+    )
     centers = _grid(10, spacing=1.0, base=(5.0, 0.0, 0.0))  # all within ~15 m
     out = det.detect(centers, _dims(10), np.zeros(10), sensor_xyz=np.zeros(3))
     # Near objects have only a small range-driven miss prob (~4-12%), so most detected.
@@ -42,8 +41,9 @@ def test_far_objects_mostly_missed():
 
 
 def test_localization_noise_is_bounded():
-    cfg = DetectorNoiseConfig(base_miss_rate=0.0, occlusion_miss_boost=0.0,
-                              false_positive_rate=0.0, pos_noise_std_m=0.2)
+    cfg = DetectorNoiseConfig(
+        base_miss_rate=0.0, occlusion_miss_boost=0.0, false_positive_rate=0.0, pos_noise_std_m=0.2
+    )
     det = SimulatedDetector(cfg, seed=42)
     centers = _grid(50, spacing=2.0, base=(5.0, 0.0, 0.0))
     out = det.detect(centers, _dims(50), np.zeros(50), sensor_xyz=np.zeros(3))
@@ -66,9 +66,13 @@ def test_determinism_same_seed_same_output():
 def test_confidence_falls_with_range():
     # Disable dropout entirely so both near and far objects are always detected,
     # isolating the confidence-vs-range behavior.
-    cfg = DetectorNoiseConfig(base_miss_rate=0.0, occlusion_miss_boost=0.0,
-                              max_range_miss_rate=0.0, false_positive_rate=0.0,
-                              pos_noise_std_m=0.0)
+    cfg = DetectorNoiseConfig(
+        base_miss_rate=0.0,
+        occlusion_miss_boost=0.0,
+        max_range_miss_rate=0.0,
+        false_positive_rate=0.0,
+        pos_noise_std_m=0.0,
+    )
     det = SimulatedDetector(cfg, seed=1)
     near = det.detect(np.array([[10.0, 0, 0]]), _dims(1), np.zeros(1), np.zeros(3))
     far = det.detect(np.array([[90.0, 0, 0]]), _dims(1), np.zeros(1), np.zeros(3))

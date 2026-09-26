@@ -31,7 +31,6 @@ import numpy as np
 import numpy.typing as npt
 import yaml
 
-
 # ─── Coordinate transform helpers ───────────────────────────────────────────
 
 
@@ -207,11 +206,7 @@ class OPV2VDataset:
             # Frame indices per agent, from .yaml filenames.
             per_agent_frames: list[set[int]] = []
             for a in agent_dirs:
-                frames = {
-                    int(f.stem)
-                    for f in a.glob("*.yaml")
-                    if f.stem.isdigit()
-                }
+                frames = {int(f.stem) for f in a.glob("*.yaml") if f.stem.isdigit()}
                 per_agent_frames.append(frames)
 
             # Common frames across all agents (so cooperation is possible).
@@ -361,7 +356,7 @@ class OPV2VDataset:
         with open(path) as f:
             # OPV2V YAMLs embed numpy objects; safe_load cannot reconstruct them.
             # These are trusted research data files.
-            return yaml.unsafe_load(f)  # noqa: S506
+            return yaml.unsafe_load(f)
 
     @staticmethod
     def _parse_gt(meta: dict[str, Any]) -> list[GroundTruthObject]:
@@ -404,7 +399,7 @@ class OPV2VDataset:
         Uses open3d if available; falls back to a minimal ASCII/binary PCD reader.
         """
         try:
-            import open3d as o3d  # noqa: PLC0415
+            import open3d as o3d
 
             pcd = o3d.io.read_point_cloud(str(path))
             pts = np.asarray(pcd.points, dtype=np.float32)  # (N, 3)

@@ -240,42 +240,57 @@ def _plot(frames: list[FrameCoverage], out_dir: Path) -> None:
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data-root", required=True, type=Path,
-                        help="Path to OPV2V split dir (e.g. .../opv2v-test-001/test)")
+    parser.add_argument(
+        "--data-root",
+        required=True,
+        type=Path,
+        help="Path to OPV2V split dir (e.g. .../opv2v-test-001/test)",
+    )
     parser.add_argument("--out", type=Path, default=Path("data/results/cooperation_coverage"))
-    parser.add_argument("--max-scenarios", type=int, default=None,
-                        help="Limit number of scenarios (for a quick run)")
-    parser.add_argument("--match-tolerance", type=float, default=3.0,
-                        help="World-frame distance (m) to consider two detections the same object")
+    parser.add_argument(
+        "--max-scenarios",
+        type=int,
+        default=None,
+        help="Limit number of scenarios (for a quick run)",
+    )
+    parser.add_argument(
+        "--match-tolerance",
+        type=float,
+        default=3.0,
+        help="World-frame distance (m) to consider two detections the same object",
+    )
     args = parser.parse_args()
 
     summary = run_analysis(args.data_root, args.out, args.max_scenarios, args.match_tolerance)
 
     # Print the headline.
-    print("=" * 70)  # noqa: T201
-    print("COOPERATION COVERAGE ANALYSIS — first quantitative result")  # noqa: T201
-    print("=" * 70)  # noqa: T201
-    print(f"Scenarios analyzed:        {summary.num_scenarios}")  # noqa: T201
-    print(f"Frames analyzed:           {summary.num_frames}")  # noqa: T201
-    print(f"Mean agents per frame:     {summary.mean_agents_per_frame:.2f}")  # noqa: T201
-    print(f"Mean objects (best single):{summary.mean_single_count:.2f}")  # noqa: T201
-    print(f"Mean objects (collective): {summary.mean_collective_count:.2f}")  # noqa: T201
-    print("-" * 70)  # noqa: T201
-    print(f"HEADLINE — mean coverage gain vs best single agent: "  # noqa: T201
-          f"{summary.mean_gain_vs_best_single:.2f}x "
-          f"(+{summary.mean_extra_objects_vs_best_single:.1f} objects/frame)")
-    print(f"          median gain: {summary.median_gain_vs_best_single:.2f}x")  # noqa: T201
-    print(f"          gain vs WORST single agent: "  # noqa: T201
-          f"{summary.mean_gain_vs_worst_single:.2f}x")
-    print("-" * 70)  # noqa: T201
-    print("Kill Gate A read: a gain well above 1.0x means cooperation has strong")  # noqa: T201
-    print("headroom on this data. A gain near 1.0x means investigate before building.")  # noqa: T201
-    print(f"\nResults written to: {args.out}")  # noqa: T201
-    print("Top cooperation scenes (demo candidates):")  # noqa: T201
+    print("=" * 70)
+    print("COOPERATION COVERAGE ANALYSIS — first quantitative result")
+    print("=" * 70)
+    print(f"Scenarios analyzed:        {summary.num_scenarios}")
+    print(f"Frames analyzed:           {summary.num_frames}")
+    print(f"Mean agents per frame:     {summary.mean_agents_per_frame:.2f}")
+    print(f"Mean objects (best single):{summary.mean_single_count:.2f}")
+    print(f"Mean objects (collective): {summary.mean_collective_count:.2f}")
+    print("-" * 70)
+    print(
+        f"HEADLINE — mean coverage gain vs best single agent: "
+        f"{summary.mean_gain_vs_best_single:.2f}x "
+        f"(+{summary.mean_extra_objects_vs_best_single:.1f} objects/frame)"
+    )
+    print(f"          median gain: {summary.median_gain_vs_best_single:.2f}x")
+    print(f"          gain vs WORST single agent: {summary.mean_gain_vs_worst_single:.2f}x")
+    print("-" * 70)
+    print("Kill Gate A read: a gain well above 1.0x means cooperation has strong")
+    print("headroom on this data. A gain near 1.0x means investigate before building.")
+    print(f"\nResults written to: {args.out}")
+    print("Top cooperation scenes (demo candidates):")
     for s in summary.top_cooperation_scenes[:5]:
-        print(f"  {s['scenario_id']} frame {s['frame_idx']}: "  # noqa: T201
-              f"{s['best_single_count']} -> {s['collective_count']} "
-              f"({s['gain']}x, +{s['extra_objects']} objects)")
+        print(
+            f"  {s['scenario_id']} frame {s['frame_idx']}: "
+            f"{s['best_single_count']} -> {s['collective_count']} "
+            f"({s['gain']}x, +{s['extra_objects']} objects)"
+        )
 
 
 if __name__ == "__main__":

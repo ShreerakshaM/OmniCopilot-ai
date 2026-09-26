@@ -73,9 +73,12 @@ def compute_3d_iou(
         cx, cy, cz = boxes[:, 0], boxes[:, 1], boxes[:, 2]
         length, width, height = boxes[:, 3], boxes[:, 4], boxes[:, 5]
         return (
-            cx - length / 2.0, cx + length / 2.0,
-            cy - width / 2.0, cy + width / 2.0,
-            cz - height / 2.0, cz + height / 2.0,
+            cx - length / 2.0,
+            cx + length / 2.0,
+            cy - width / 2.0,
+            cy + width / 2.0,
+            cz - height / 2.0,
+            cz + height / 2.0,
             length * width * height,
         )
 
@@ -92,8 +95,9 @@ def compute_3d_iou(
     return iou
 
 
-def _average_precision(recall: npt.NDArray[np.float64],
-                       precision: npt.NDArray[np.float64]) -> float:
+def _average_precision(
+    recall: npt.NDArray[np.float64], precision: npt.NDArray[np.float64]
+) -> float:
     """Area under the precision-recall curve (VOC-style, all-points interpolation)."""
     mrec = np.concatenate(([0.0], recall, [1.0]))
     mpre = np.concatenate(([0.0], precision, [0.0]))
@@ -178,8 +182,11 @@ def compute_map(
             errs = [s[2] for s in scored if s[1] == 1]
             first_pos_err = float(np.mean(errs)) if errs else 0.0
 
-    f1 = (2 * first_precision * first_recall / (first_precision + first_recall)
-          if (first_precision + first_recall) > 0 else 0.0)
+    f1 = (
+        2 * first_precision * first_recall / (first_precision + first_recall)
+        if (first_precision + first_recall) > 0
+        else 0.0
+    )
 
     return PerceptionMetrics(
         mean_average_precision=float(np.mean(aps)) if aps else 0.0,

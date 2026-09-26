@@ -31,11 +31,13 @@ class CommunicationPolicyNetwork(nn.Module):
         layers: list[nn.Module] = []
         in_dim = obs_dim
         for hidden_dim in hidden_dims:
-            layers.extend([
-                nn.Linear(in_dim, hidden_dim),
-                nn.LayerNorm(hidden_dim),
-                nn.ReLU(),
-            ])
+            layers.extend(
+                [
+                    nn.Linear(in_dim, hidden_dim),
+                    nn.LayerNorm(hidden_dim),
+                    nn.ReLU(),
+                ]
+            )
             in_dim = hidden_dim
 
         layers.append(nn.Linear(in_dim, action_dim))
