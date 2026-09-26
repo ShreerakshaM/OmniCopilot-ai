@@ -93,6 +93,16 @@ void BindWorldModel(py::module_& m) {
       .def_readwrite("conflict_resolution_threshold",
                      &FusionConfig::conflict_resolution_threshold);
 
+  // ReliabilityConfig — adaptive per-agent trust parameters.
+  py::class_<ReliabilityConfig>(m, "ReliabilityConfig")
+      .def(py::init<>())
+      .def_readwrite("initial_trust", &ReliabilityConfig::initial_trust)
+      .def_readwrite("trust_ema_alpha", &ReliabilityConfig::trust_ema_alpha)
+      .def_readwrite("min_trust", &ReliabilityConfig::min_trust)
+      .def_readwrite("max_trust", &ReliabilityConfig::max_trust)
+      .def_readwrite("calibration_period",
+                     &ReliabilityConfig::calibration_period);
+
   py::class_<WorldModelConfig>(m, "WorldModelConfig")
       .def(py::init<>())
       .def_readwrite("max_entities", &WorldModelConfig::max_entities)
@@ -102,7 +112,8 @@ void BindWorldModel(py::module_& m) {
       .def_readwrite("confirmation_threshold", &WorldModelConfig::confirmation_threshold)
       .def_readwrite("confirmation_source_count", &WorldModelConfig::confirmation_source_count)
       .def_readwrite("spatial_cell_size_m", &WorldModelConfig::spatial_cell_size_m)
-      .def_readwrite("fusion", &WorldModelConfig::fusion);
+      .def_readwrite("fusion", &WorldModelConfig::fusion)
+      .def_readwrite("reliability", &WorldModelConfig::reliability);
 
   // WorldModelStats
   py::class_<WorldModelStats>(m, "WorldModelStats")
