@@ -12,6 +12,7 @@ option cc_enable_arenas = true;
 import "google/protobuf/timestamp.proto";
 import "observation.proto";
 import "entity.proto";
+import "world_state.proto";
 
 // Priority level for message transmission
 enum MessagePriority {
