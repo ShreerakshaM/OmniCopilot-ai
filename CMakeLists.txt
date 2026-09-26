@@ -116,15 +116,16 @@ endif()
 find_package(Eigen3 3.3 QUIET NO_MODULE)
 if(NOT Eigen3_FOUND)
   include(FetchContent)
-  # Eigen's upstream test suite is not part of this project and should not be
-  # registered with our CTest invocation.
-  set(EIGEN_BUILD_TESTING OFF CACHE BOOL "" FORCE)
   FetchContent_Declare(
     eigen
     GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
     GIT_TAG 3.4.0
   )
-  FetchContent_MakeAvailable(eigen)
+  FetchContent_Populate(eigen)
+  add_library(Eigen3::Eigen INTERFACE IMPORTED GLOBAL)
+  set_target_properties(Eigen3::Eigen PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${eigen_SOURCE_DIR}"
+  )
 endif()
 
 # ─── Proto Generation (if Protobuf available) ────────────────────────────────

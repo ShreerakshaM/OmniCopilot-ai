@@ -93,7 +93,7 @@ def frame_recovery(
         return RecoveryStats(0, 0, 0.0, 0.0, 0.0, 0.0)
 
     # Stack all agents' centers, remembering which agent each row came from.
-    rows: list[np.ndarray] = []
+    rows: list[npt.NDArray[np.float64]] = []
     owner: list[str] = []
     for aid, centers in per_agent_world_centers.items():
         c = np.asarray(centers, dtype=np.float64).reshape(-1, 3)

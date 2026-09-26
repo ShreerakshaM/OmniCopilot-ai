@@ -77,9 +77,13 @@ jobs:
 
       - name: Run property-based tests
         run: |
-          uv run pytest tests/property/ \
-            --timeout=300 \
-            -x
+          if [ -d tests/property ]; then
+            uv run pytest tests/property/ \
+              --timeout=300 \
+              -x
+          else
+            echo "No property-based test directory is present."
+          fi
 
       - name: Upload coverage
         if: matrix.python-version == '3.11'

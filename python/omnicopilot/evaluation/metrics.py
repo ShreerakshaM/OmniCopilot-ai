@@ -69,7 +69,17 @@ def compute_3d_iou(
     if n == 0 or m == 0:
         return iou
 
-    def _extents(boxes: npt.NDArray[np.float64]) -> tuple:
+    def _extents(
+        boxes: npt.NDArray[np.float64],
+    ) -> tuple[
+        npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
+    ]:
         cx, cy, cz = boxes[:, 0], boxes[:, 1], boxes[:, 2]
         length, width, height = boxes[:, 3], boxes[:, 4], boxes[:, 5]
         return (

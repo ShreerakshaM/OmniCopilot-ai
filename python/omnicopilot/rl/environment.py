@@ -13,7 +13,7 @@ import numpy.typing as npt
 from gymnasium import spaces
 
 
-class CommunicationEnv(gym.Env[npt.NDArray[np.float32], npt.NDArray[np.float32]]):
+class CommunicationEnv(gym.Env):  # type: ignore[misc]
     """Communication policy environment.
 
     Observation space:
@@ -79,7 +79,10 @@ class CommunicationEnv(gym.Env[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         """Reset environment to initial state."""
         super().reset(seed=seed)
         # TODO: Load scenario, initialize agents.
-        obs = np.zeros(self.observation_space.shape, dtype=np.float32)
+        obs = np.zeros(
+            self.observation_space.shape or (0,),
+            dtype=np.float32,
+        )
         return obs, {}
 
     def step(
@@ -94,7 +97,10 @@ class CommunicationEnv(gym.Env[npt.NDArray[np.float32], npt.NDArray[np.float32]]
             Tuple of (observation, reward, terminated, truncated, info).
         """
         # TODO: Implement communication simulation and reward computation.
-        obs = np.zeros(self.observation_space.shape, dtype=np.float32)
+        obs = np.zeros(
+            self.observation_space.shape or (0,),
+            dtype=np.float32,
+        )
         reward = 0.0
         terminated = False
         truncated = False
