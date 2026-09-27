@@ -133,6 +133,11 @@ class WorldModel {
   /// Reset the world model (clear all entities).
   void Reset();
 
+  /// Clear tracked entities but KEEP learned per-agent trust and the clock.
+  /// Use to process each frame of a dynamic scene against a fresh consensus
+  /// while trust accumulates across frames.
+  void ResetEntities();
+
  private:
   struct Impl;
   std::unique_ptr<Impl> impl_;

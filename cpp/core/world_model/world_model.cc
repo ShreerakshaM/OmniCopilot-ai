@@ -218,8 +218,9 @@ void WorldModel::IngestObservations(
       TrackedEntity& entity = it->second;
 
       // Consensus-gated trust, measured BEFORE fusing (compare to prior consensus).
-      // Reward if the obs agrees (within agreement_radius) with an entity another
-      // agent corroborates; penalize if it associated but disagrees (outlier/spoof).
+      // On agreement, credit BOTH this agent and the existing corroborators (they
+      // agree with each other) -- avoids penalizing whoever created the entity first.
+      // On disagreement, penalize only the disagreeing newcomer (outlier/spoof).
       {
         bool has_other_source = false;
         for (const auto& ev : entity.supporting_evidence) {
@@ -229,6 +230,11 @@ void WorldModel::IngestObservations(
           double d = obs.position.DistanceTo(entity.position);
           if (d <= impl_->config.reliability.agreement_radius_m) {
             impl_->reliability.RecordCorrect(obs.agent_id);
+            for (const auto& ev : entity.supporting_evidence) {
+              if (ev.agent_id != obs.agent_id) {
+                impl_->reliability.RecordCorrect(ev.agent_id);
+              }
+            }
           } else {
             impl_->reliability.RecordIncorrect(obs.agent_id);
           }
@@ -392,6 +398,15 @@ void WorldModel::Reset() {
   impl_->tick = 0;
   impl_->current_time_s = 0.0;
   spdlog::info("World model reset");
+}
+
+void WorldModel::ResetEntities() {
+  // Clear tracked entities but KEEP learned per-agent trust (reliability) and the
+  // clock. Lets a caller process each frame of a dynamic scene against a fresh
+  // fused consensus (no stale moving-object positions) while trust accumulates.
+  impl_->entities.clear();
+  impl_->trackers.clear();
+  impl_->spatial_index.Clear();
 }
 
 }  // namespace omnicopilot
