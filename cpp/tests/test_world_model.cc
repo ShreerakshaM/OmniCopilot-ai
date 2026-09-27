@@ -354,11 +354,12 @@ TEST_F(WorldModelTest, MislocalizingAdversaryIsPenalized) {
   config.fusion.association_max_distance_m = 6.0;  // loose gate: 5m-off still associates
   config.reliability.trust_ema_alpha = 0.15;
   config.reliability.calibration_period = 5;
-  config.reliability.agreement_radius_m = 1.0;
+  config.reliability.agreement_radius_m = 2.5;  // > honest noise, < 5m adversary offset
   WorldModel wm(config);
 
   double ts = 1.0;
   for (int i = 0; i < 60; ++i) {
+    wm.ResetEntities();  // fresh consensus per frame; trust persists
     ts += 0.1;
     // Two honest agents agree on a real car at (10, 20).
     wm.IngestObservations({MakeObs("h1_" + std::to_string(i), "h1", 10.0, 20.0, 0.9, ts)}, 1.0);
