@@ -114,7 +114,7 @@ carla = [
 demo = [
   "rerun-sdk>=0.14,<1.0",
   "streamlit>=1.31,<2.0",
-  "dash>=2.15,<3.0",
+  "dash>=3.0,<4.0",
 ]
 
 # Distributed RL training
@@ -148,7 +148,7 @@ all = [
   "carla>=0.9.15",
   "rerun-sdk>=0.14,<1.0",
   "streamlit>=1.31,<2.0",
-  "dash>=2.15,<3.0",
+  "dash>=3.0,<4.0",
   "ray[rllib]>=2.9,<2.44",
   "prometheus-client>=0.20,<1.0",
   "opentelemetry-api>=1.23,<2.0",
