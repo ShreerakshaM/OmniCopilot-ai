@@ -143,11 +143,14 @@ def run(oc: Any, data_root: Path, min_agents: int, seed: int,
         cfg.reliability.agreement_radius_m = agreement_radius
         return cfg
 
-    # ── PASS 1: learn per-agent trust on ONE persistent model over all frames ──
+    # ── PASS 1: learn per-agent trust. Reset ENTITIES each frame (fresh consensus for
+    # a dynamic scene) but KEEP trust across frames, so agreement is judged against
+    # this frame's fused positions, not stale positions of moving cars. ──
     wm_learn = oc.WorldModel(base_cfg())
     adv_trust_trace: list[float] = []
     t = 1.0
     for frame_no, fi in enumerate(sc.frame_indices):
+        wm_learn.reset_entities()  # fresh consensus this frame; trust persists
         frames = ds.get_all_agent_frames(chosen, fi, load_lidar=False)
         t += 0.1
         for aid, fr in frames.items():
