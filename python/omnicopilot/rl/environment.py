@@ -13,7 +13,7 @@ import numpy.typing as npt
 from gymnasium import spaces
 
 
-class CommunicationEnv(gym.Env):  # type: ignore[misc]
+class CommunicationEnv(gym.Env[npt.NDArray[np.float32], npt.NDArray[np.float32]]):
     """Communication policy environment.
 
     Observation space:

@@ -401,7 +401,7 @@ class OPV2VDataset:
         try:
             import open3d as o3d
 
-            pcd = o3d.io.read_point_cloud(str(path))
+            pcd = o3d.io.read_point_cloud(path)
             pts = np.asarray(pcd.points, dtype=np.float32)  # (N, 3)
             # open3d drops intensity; pad a zero intensity column for a stable (N,4).
             intensity = np.zeros((pts.shape[0], 1), dtype=np.float32)
