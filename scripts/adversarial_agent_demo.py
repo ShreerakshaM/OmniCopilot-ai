@@ -120,7 +120,7 @@ def choose_scenario(ds: Any, min_agents: int) -> str:
 
 
 def run(oc: Any, data_root: Path, min_agents: int, seed: int,
-        assoc_radius: float, adv_offset_m: float) -> dict:
+        assoc_radius: float, adv_offset_m: float, agreement_radius: float) -> dict:
     from omnicopilot.data.opv2v import OPV2VDataset  # noqa: PLC0415
     from omnicopilot.evaluation.metrics import compute_map  # noqa: PLC0415
     from omnicopilot.perception.simulated_detector import (  # noqa: PLC0415
@@ -140,7 +140,7 @@ def run(oc: Any, data_root: Path, min_agents: int, seed: int,
         cfg.fusion.association_max_distance_m = max(assoc_radius, adv_offset_m + 1.0)
         cfg.reliability.trust_ema_alpha = 0.15
         cfg.reliability.calibration_period = 5
-        cfg.reliability.agreement_radius_m = 1.0
+        cfg.reliability.agreement_radius_m = agreement_radius
         return cfg
 
     # ── PASS 1: learn per-agent trust on ONE persistent model over all frames ──
@@ -231,13 +231,17 @@ def main() -> None:
     p.add_argument("--min-agents", type=int, default=3)
     p.add_argument("--assoc-radius", type=float, default=2.5)
     p.add_argument("--adv-offset-m", type=float, default=5.0)
+    p.add_argument("--agreement-radius", type=float, default=2.5,
+                   help="Consensus-agreement radius (m); must be > honest detector "
+                        "noise (~1-2 m) and < adversary offset, or honest agents are "
+                        "wrongly penalized.")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", type=Path, default=None)
     args = p.parse_args()
 
     oc = import_cpp(args.module_dir)
     r = run(oc, args.data_root, args.min_agents, args.seed, args.assoc_radius,
-            args.adv_offset_m)
+            args.adv_offset_m, args.agreement_radius)
 
     print("=" * 68)
     print("ADVERSARIAL-AGENT DEMO — does the trust layer defend fusion?")
