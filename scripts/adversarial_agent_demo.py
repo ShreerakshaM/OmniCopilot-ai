@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import statistics
 import sys
 from pathlib import Path
 from typing import Any
@@ -44,15 +43,25 @@ if _PY_ROOT.is_dir() and str(_PY_ROOT) not in sys.path:
 def import_cpp(module_dir: str | None) -> Any:
     if module_dir:
         sys.path.insert(0, module_dir)
-    import _omnicopilot_cpp as oc  # noqa: PLC0415
+    import _omnicopilot_cpp as oc
+
     if not hasattr(oc.WorldModel(oc.WorldModelConfig()), "get_agent_trust"):
-        msg = ("The built module has no get_agent_trust -- rebuild after the trust-layer "
-               "integration (cmake --build build).")
+        msg = (
+            "The built module has no get_agent_trust -- rebuild after the trust-layer "
+            "integration (cmake --build build)."
+        )
         raise RuntimeError(msg)
     return oc
 
 
-def make_obs(oc: Any, agent_id: str, oid: str, xyz, conf: float, t: float) -> Any:
+def make_obs(
+    oc: Any,
+    agent_id: str,
+    oid: str,
+    xyz: np.ndarray,
+    conf: float,
+    t: float,
+) -> Any:
     o = oc.Observation()
     o.observation_id = oid
     o.agent_id = agent_id
@@ -63,11 +72,13 @@ def make_obs(oc: Any, agent_id: str, oid: str, xyz, conf: float, t: float) -> An
     return o
 
 
-def adversarial_detections(rng: np.random.Generator, gt_centers: np.ndarray,
-                           fixed_phantoms: np.ndarray,
-                           sensor_xyz=(0.0, 0.0, 0.0)) -> np.ndarray:
-    """Adversary output: FIXED phantom objects at consistent fake locations (a
-    persistent spoof), plus a few real objects shifted enough not to corroborate.
+def adversarial_detections(
+    rng: np.random.Generator,
+    gt_centers: np.ndarray,
+    fixed_phantoms: np.ndarray,
+    sensor_xyz: np.ndarray,
+) -> np.ndarray:
+    """Adversary output using fixed phantom objects and shifted real objects.
 
     Using FIXED phantom locations (not fresh random scatter each frame) is important:
     a consistent lie forms a stable single-source entity that never gets corroborated
@@ -85,13 +96,19 @@ def adversarial_detections(rng: np.random.Generator, gt_centers: np.ndarray,
     return np.vstack([fixed_phantoms, fabricated]) if len(fabricated) else fixed_phantoms
 
 
-def run(oc: Any, data_root: Path, min_agents: int, seed: int,
-        assoc_radius: float, max_scenarios: int | None) -> dict:
-    from omnicopilot.data.opv2v import OPV2VDataset  # noqa: PLC0415
-    from omnicopilot.evaluation.metrics import compute_map  # noqa: PLC0415
-    from omnicopilot.perception.detector import OpenCOODDetector  # noqa: PLC0415
-    from omnicopilot.perception.simulated_detector import (  # noqa: PLC0415
-        DetectorNoiseConfig, SimulatedDetector,
+def run(
+    oc: Any,
+    data_root: Path,
+    min_agents: int,
+    seed: int,
+    assoc_radius: float,
+    max_scenarios: int | None,
+) -> dict:
+    from omnicopilot.data.opv2v import OPV2VDataset
+    from omnicopilot.evaluation.metrics import compute_map
+    from omnicopilot.perception.simulated_detector import (
+        DetectorNoiseConfig,
+        SimulatedDetector,
     )
 
     ds = OPV2VDataset(data_root)
@@ -121,16 +138,16 @@ def run(oc: Any, data_root: Path, min_agents: int, seed: int,
     chosen = None
     for sid in ds.scenario_ids():
         sc = ds.get_scenario(sid)
-        if len(sc.agent_ids) >= min_agents:
-            if chosen is None or len(sc.frame_indices) > len(
-                    ds.get_scenario(chosen).frame_indices):
-                chosen = sid
+        if len(sc.agent_ids) >= min_agents and (
+            chosen is None or len(sc.frame_indices) > len(ds.get_scenario(chosen).frame_indices)
+        ):
+            chosen = sid
     if chosen is None:
         msg = f"No scenario with >= {min_agents} agents."
         raise RuntimeError(msg)
 
     sc = ds.get_scenario(chosen)
-    adversary_id = sc.agent_ids[-1]          # ONE fixed adversary for the whole run
+    adversary_id = sc.agent_ids[-1]  # ONE fixed adversary for the whole run
     honest_ids = [a for a in sc.agent_ids if a != adversary_id]
 
     # The adversary's FIXED phantom objects: consistent fake locations near the
@@ -160,43 +177,57 @@ def run(oc: Any, data_root: Path, min_agents: int, seed: int,
         # This frame's GT (union across agents, deduped) for scoring.
         all_centers = [fr.gt_locations_world() for fr in frames.values()]
         gt_union = _dedupe(np.vstack(all_centers)) if all_centers else np.zeros((0, 3))
-        gt7 = np.hstack([gt_union, np.tile([4.5, 2.0, 1.5, 0.0], (len(gt_union), 1))]) \
-            if len(gt_union) else np.zeros((0, 7))
+        gt7 = (
+            np.hstack([gt_union, np.tile([4.5, 2.0, 1.5, 0.0], (len(gt_union), 1))])
+            if len(gt_union)
+            else np.zeros((0, 7))
+        )
 
         # Honest agents' simulated detections; remember sensor positions.
         per_agent = {}
         sensor_positions = {}
         for aid, fr in frames.items():
-            sxyz = np.asarray(fr.pose)[:3, 3] if np.asarray(fr.pose).shape == (4, 4) \
-                else np.zeros(3)
+            sxyz = (
+                np.asarray(fr.pose)[:3, 3] if np.asarray(fr.pose).shape == (4, 4) else np.zeros(3)
+            )
             sensor_positions[aid] = sxyz
             if aid == adversary_id:
                 continue
             centers = fr.gt_locations_world()
-            dims = np.array([o.dimensions for o in fr.gt_objects]) if fr.gt_objects \
+            dims = (
+                np.array([o.dimensions for o in fr.gt_objects])
+                if fr.gt_objects
                 else np.zeros((0, 3))
-            yaws = np.array([o.yaw_rad for o in fr.gt_objects]) if fr.gt_objects \
-                else np.zeros(0)
+            )
+            yaws = np.array([o.yaw_rad for o in fr.gt_objects]) if fr.gt_objects else np.zeros(0)
             per_agent[aid] = honest.detect(centers, dims, yaws, sxyz)
 
         adv_centers = adversarial_detections(
-            rng, gt_union, fixed_phantoms,
-            sensor_xyz=sensor_positions.get(adversary_id, (0, 0, 0)))
+            rng, gt_union, fixed_phantoms, sensor_xyz=sensor_positions.get(adversary_id, (0, 0, 0))
+        )
 
         step_t += 0.1  # ~10 Hz, realistic frame cadence
         for wm, store in ((wm_trust, coop_trust), (wm_notrust, coop_notrust)):
             for aid, dets in per_agent.items():
                 for j, d in enumerate(dets):
                     wm.ingest_observations(
-                        [make_obs(oc, aid, f"{aid}_{frame_no}_{j}", d.position,
-                                  d.confidence, step_t)], 0.9)
+                        [
+                            make_obs(
+                                oc, aid, f"{aid}_{frame_no}_{j}", d.position, d.confidence, step_t
+                            )
+                        ],
+                        0.9,
+                    )
             for j, c in enumerate(adv_centers):
                 wm.ingest_observations(
-                    [make_obs(oc, adversary_id, f"{adversary_id}_{frame_no}_{j}",
-                              c, 0.9, step_t)], 0.9)
+                    [make_obs(oc, adversary_id, f"{adversary_id}_{frame_no}_{j}", c, 0.9, step_t)],
+                    0.9,
+                )
             wm.tick(step_t)
-            rows = [[e.position.x, e.position.y, e.position.z, 4.5, 2.0, 1.5, 0.0,
-                     float(e.confidence)] for e in wm.get_entities()]
+            rows = [
+                [e.position.x, e.position.y, e.position.z, 4.5, 2.0, 1.5, 0.0, float(e.confidence)]
+                for e in wm.get_entities()
+            ]
             store.append(np.array(rows) if rows else np.zeros((0, 8)))
 
         gts.append(gt7)
@@ -212,16 +243,26 @@ def run(oc: Any, data_root: Path, min_agents: int, seed: int,
         "scenario": chosen,
         "adversary_id": adversary_id,
         "frames": len(gts),
-        "adversary_trust_start": round(adversary_trust_trace[0], 4) if adversary_trust_trace else None,
-        "adversary_trust_end": round(adversary_trust_trace[-1], 4) if adversary_trust_trace else None,
-        "adversary_trust_min": round(min(adversary_trust_trace), 4) if adversary_trust_trace else None,
+        "adversary_trust_start": (
+            round(adversary_trust_trace[0], 4) if adversary_trust_trace else None
+        ),
+        "adversary_trust_end": (
+            round(adversary_trust_trace[-1], 4) if adversary_trust_trace else None
+        ),
+        "adversary_trust_min": (
+            round(min(adversary_trust_trace), 4) if adversary_trust_trace else None
+        ),
         "honest_agent_final_trust": round(honest_final, 4) if honest_final is not None else None,
-        "with_trust": {"mAP": round(m_trust.mean_average_precision, 4),
-                       "precision": round(m_trust.precision, 4),
-                       "recall": round(m_trust.recall, 4)},
-        "without_trust": {"mAP": round(m_notrust.mean_average_precision, 4),
-                          "precision": round(m_notrust.precision, 4),
-                          "recall": round(m_notrust.recall, 4)},
+        "with_trust": {
+            "mAP": round(m_trust.mean_average_precision, 4),
+            "precision": round(m_trust.precision, 4),
+            "recall": round(m_trust.recall, 4),
+        },
+        "without_trust": {
+            "mAP": round(m_notrust.mean_average_precision, 4),
+            "precision": round(m_notrust.precision, 4),
+            "recall": round(m_notrust.recall, 4),
+        },
         "precision_defended": round(m_trust.precision - m_notrust.precision, 4),
     }
 
@@ -247,16 +288,17 @@ def main() -> None:
     args = p.parse_args()
 
     oc = import_cpp(args.module_dir)
-    r = run(oc, args.data_root, args.min_agents, args.seed, args.assoc_radius,
-            args.max_scenarios)
+    r = run(oc, args.data_root, args.min_agents, args.seed, args.assoc_radius, args.max_scenarios)
 
     print("=" * 68)
     print("ADVERSARIAL-AGENT DEMO — does the trust layer defend fusion?")
     print("=" * 68)
     print(f"Frames: {r['frames']}  (1 adversary + honest agents per frame)")
     print("-" * 68)
-    print(f"Adversary trust:  start {r['adversary_trust_start']}  ->  "
-          f"end {r['adversary_trust_end']}  (min {r['adversary_trust_min']})")
+    print(
+        f"Adversary trust:  start {r['adversary_trust_start']}  ->  "
+        f"end {r['adversary_trust_end']}  (min {r['adversary_trust_min']})"
+    )
     print(f"Honest agent final trust: {r['honest_agent_final_trust']}")
     print("-" * 68)
     print(f"{'':16} {'mAP':>8} {'precision':>10} {'recall':>8}")
