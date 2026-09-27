@@ -110,6 +110,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: Run integration tests
+        if: hashFiles('tests/integration/**/*.py') != ''
         run: |
           uv run pytest tests/integration/ \
             -m "not carla and not gpu" \
