@@ -101,7 +101,9 @@ void BindWorldModel(py::module_& m) {
       .def_readwrite("min_trust", &ReliabilityConfig::min_trust)
       .def_readwrite("max_trust", &ReliabilityConfig::max_trust)
       .def_readwrite("calibration_period",
-                     &ReliabilityConfig::calibration_period);
+                     &ReliabilityConfig::calibration_period)
+      .def_readwrite("agreement_radius_m",
+                     &ReliabilityConfig::agreement_radius_m);
 
   py::class_<WorldModelConfig>(m, "WorldModelConfig")
       .def(py::init<>())

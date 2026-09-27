@@ -87,9 +87,8 @@ def fuse_frame(oc: Any, frames: dict, radius: float, agent_trust: float) -> tupl
     wm = oc.WorldModel(cfg)
 
     best_single = 0
-    # Use a single, consistent step time for all observations in this frame, so the
-    # lifecycle sees one clean simulation step (like the demo). Decoupled from the raw
-    # dataset timestamp to avoid a huge decay dt that could suppress confirmation.
+    # One consistent step time for all obs this frame (decoupled from the raw dataset
+    # timestamp to avoid a large decay dt that could suppress confirmation).
     step_t = 1.0
     for aid, frame in frames.items():
         world = frame.gt_locations_world()
@@ -106,10 +105,8 @@ def fuse_frame(oc: Any, frames: dict, radius: float, agent_trust: float) -> tupl
             obs.timestamp_s = step_t
             wm.ingest_observations([obs], agent_trust)
 
-    # Advance by a positive dt so the lifecycle update runs. WorldModel::Tick
-    # early-returns if dt <= 0, which skips the Tentative->Confirmed transition
-    # entirely (the bug that produced ~0 confirmed in the first sweep). Tick to a
-    # time just past the observation time: one clean step, minimal decay.
+    # Positive dt required: WorldModel::Tick early-returns on dt<=0, skipping the
+    # Tentative->Confirmed transition (the bug behind the first sweep's ~0 confirmed).
     wm.tick(step_t + 0.1)
     stats = wm.get_stats()
     return stats.total_entities, stats.confirmed, best_single
@@ -162,14 +159,9 @@ def debug_one_frame(oc: Any, ds: Any, sid: str, fi: int, radius: float) -> None:
                     dists.append(f"{aid}:{d:.2f}m")
             print(f"    obj{i} @ ({w0[i][0]:.1f},{w0[i][1]:.1f}) -> {', '.join(dists)}")
 
-    # 4) FRAME HYPOTHESIS TEST — decide what frame `location` is actually in on THIS
-    #    dataset upload. Compare two candidate transforms by how many objects match
-    #    across agents (matches => the transform is correct):
-    #      H1: world = pose @ location   (location is EGO frame; current loader assumption)
-    #      H2: world = location          (location is already WORLD frame)
-    #    Also H3: world = inv(pose) @ location (in case location is world and we must
-    #    map into a common ego frame the other way). The winner is whichever yields
-    #    many multi-agent matches at ~2-3 m.
+    # 4) FRAME HYPOTHESIS TEST — which frame is `location` in? Compare candidate
+    #    transforms by cross-agent match count; the correct one yields many matches.
+    #      H1: pose @ location (ego)   H2: location as-is (world)   H3: inv(pose) @ location
     def _match_count(centers_by_agent: dict, tol: float) -> tuple[int, int]:
         entries = []
         for aid, cs in centers_by_agent.items():

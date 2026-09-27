@@ -346,5 +346,32 @@ TEST_F(WorldModelTest, PersistentOutlierAgentTrustFalls) {
   EXPECT_LT(wm.GetAgentTrust("liar"), t0);
 }
 
+TEST_F(WorldModelTest, MislocalizingAdversaryIsPenalized) {
+  // The subtle case the naive rule got WRONG: an adversary that associates to real
+  // entities (passes the loose distance gate) but reports them consistently OFF
+  // (disagrees with consensus) must be penalized, not rewarded. This is the
+  // consensus-agreement gate (agreement_radius_m).
+  config.fusion.association_max_distance_m = 6.0;  // loose gate: 5m-off still associates
+  config.reliability.trust_ema_alpha = 0.15;
+  config.reliability.calibration_period = 5;
+  config.reliability.agreement_radius_m = 1.0;
+  WorldModel wm(config);
+
+  double ts = 1.0;
+  for (int i = 0; i < 60; ++i) {
+    ts += 0.1;
+    // Two honest agents agree on a real car at (10, 20).
+    wm.IngestObservations({MakeObs("h1_" + std::to_string(i), "h1", 10.0, 20.0, 0.9, ts)}, 1.0);
+    wm.IngestObservations({MakeObs("h2_" + std::to_string(i), "h2", 10.1, 20.0, 0.9, ts)}, 1.0);
+    // Adversary reports the SAME car but 5 m off — associates, but disagrees.
+    wm.IngestObservations({MakeObs("liar_" + std::to_string(i), "liar", 15.0, 20.0, 0.9, ts)}, 1.0);
+    wm.Tick(ts);
+  }
+
+  EXPECT_GT(wm.GetAgentTrust("h1"), 0.8);    // honest, agreed with consensus
+  EXPECT_LT(wm.GetAgentTrust("liar"), 0.4);  // mislocalizer, disagreed -> penalized
+  EXPECT_LT(wm.GetAgentTrust("liar"), wm.GetAgentTrust("h1"));
+}
+
 }  // namespace
 }  // namespace omnicopilot

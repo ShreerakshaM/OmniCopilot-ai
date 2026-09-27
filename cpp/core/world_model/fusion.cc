@@ -49,15 +49,9 @@ std::vector<AssociationResult> FusionEngine::Associate(
     return results;
   }
 
-  // Greedy nearest-neighbor association:
-  // For each observation, find the closest existing entity within the distance
-  // threshold. Use a greedy approach — assign closest pairs first to avoid
-  // multiple observations claiming the same entity.
-  //
-  // A full Hungarian algorithm would be optimal, but greedy is sufficient for
-  // typical agent observation counts (<100) and much simpler.
+  // Greedy nearest-neighbor association (closest pairs first). Greedy suffices for
+  // typical per-agent observation counts (<100); Hungarian would be optimal but heavier.
 
-  // Track which entities have already been matched.
   std::set<std::string> matched_entities;
 
   // Score all (observation, entity) pairs.

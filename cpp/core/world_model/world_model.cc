@@ -82,9 +82,7 @@ struct WorldModel::Impl {
       }
     }
     for (const auto& eid : to_remove) {
-      // CONSENSUS SIGNAL (penalty): an entity that never reached multi-source
-      // confirmation and is now being removed was an uncorroborated singleton --
-      // treat it as a likely false positive and penalize its sole source agent.
+      // Uncorroborated singleton being purged -> likely FP; penalize its source.
       auto ent_it = entities.find(eid);
       if (ent_it != entities.end()) {
         const TrackedEntity& e = ent_it->second;
@@ -174,9 +172,7 @@ void WorldModel::IngestObservations(
   for (const auto& assoc : associations) {
     const auto& obs = observations[assoc.observation_idx];
 
-    // Option A: blend the caller-supplied trust PRIOR with the learned per-agent
-    // trust. New agents start at the configured initial trust; agents whose
-    // observations repeatedly corroborate consensus rise, persistent outliers fall.
+    // Effective trust = caller-supplied prior blended with learned per-agent trust.
     impl_->reliability.RegisterAgent(obs.agent_id);
     double learned = impl_->reliability.GetTrust(obs.agent_id);
     double effective_trust = std::clamp(agent_trust * learned, 0.0, 1.0);
@@ -220,15 +216,26 @@ void WorldModel::IngestObservations(
       if (it == impl_->entities.end()) continue;
 
       TrackedEntity& entity = it->second;
-      impl_->fusion.FuseObservation(entity, obs, effective_trust);
 
-      // CONSENSUS SIGNAL: this observation corroborated an entity that is (or is
-      // becoming) multi-source confirmed -> the agent agreed with consensus.
-      // Reward its trust. (Isolated single-source outliers are penalized later,
-      // when they go stale without corroboration — see UpdateEntityState/Purge.)
-      if (entity.unique_source_count >= impl_->config.confirmation_source_count) {
-        impl_->reliability.RecordCorrect(obs.agent_id);
+      // Consensus-gated trust, measured BEFORE fusing (compare to prior consensus).
+      // Reward if the obs agrees (within agreement_radius) with an entity another
+      // agent corroborates; penalize if it associated but disagrees (outlier/spoof).
+      {
+        bool has_other_source = false;
+        for (const auto& ev : entity.supporting_evidence) {
+          if (ev.agent_id != obs.agent_id) { has_other_source = true; break; }
+        }
+        if (has_other_source) {
+          double d = obs.position.DistanceTo(entity.position);
+          if (d <= impl_->config.reliability.agreement_radius_m) {
+            impl_->reliability.RecordCorrect(obs.agent_id);
+          } else {
+            impl_->reliability.RecordIncorrect(obs.agent_id);
+          }
+        }
       }
+
+      impl_->fusion.FuseObservation(entity, obs, effective_trust);
 
       // Update temporal tracker.
       auto tracker_it = impl_->trackers.find(assoc.entity_id);

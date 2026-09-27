@@ -27,6 +27,12 @@ struct ReliabilityConfig {
 
   /// Number of observations before trust is considered calibrated.
   uint32_t calibration_period = 50;
+
+  /// Maximum distance (meters) between an observation and the consensus (fused)
+  /// entity position for the observation to count as "agreeing with consensus".
+  /// Tighter than the association gate: associating is necessary but not sufficient
+  /// — the report must actually match where the fleet agrees the object is.
+  double agreement_radius_m = 1.0;
 };
 
 /// Trust record for a single agent.
