@@ -148,7 +148,8 @@ void BindWorldModel(py::module_& m) {
            py::return_value_policy::reference_internal)
       .def("get_stats", &WorldModel::GetStats)
       .def("get_agent_trust", &WorldModel::GetAgentTrust, py::arg("agent_id"))
-      .def("reset", &WorldModel::Reset);
+      .def("reset", &WorldModel::Reset)
+      .def("reset_entities", &WorldModel::ResetEntities);
 }
 
 }  // namespace omnicopilot
