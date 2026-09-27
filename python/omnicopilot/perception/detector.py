@@ -17,22 +17,14 @@ import numpy.typing as npt
 class Detection3D:
     """A single 3D detection from the perception model."""
 
-    # Bounding box center (x, y, z) in world coordinates.
-    position: npt.NDArray[np.float64]  # shape (3,)
-    # Bounding box dimensions (length, width, height).
-    dimensions: npt.NDArray[np.float64]  # shape (3,)
-    # Heading angle in radians.
-    heading: float
-    # Velocity estimate (vx, vy, vz).
-    velocity: npt.NDArray[np.float64]  # shape (3,)
-    # Object class index.
+    position: npt.NDArray[np.float64]  # (x, y, z) world coords, shape (3,)
+    dimensions: npt.NDArray[np.float64]  # (length, width, height), shape (3,)
+    heading: float  # radians
+    velocity: npt.NDArray[np.float64]  # (vx, vy, vz), shape (3,)
     class_id: int
-    # Per-class confidence scores.
     class_scores: npt.NDArray[np.float64]  # shape (num_classes,)
-    # Overall detection confidence.
     confidence: float
-    # Track ID (stable across frames, -1 if no tracking).
-    track_id: int = -1
+    track_id: int = -1  # stable across frames, -1 if untracked
 
 
 @dataclass
@@ -42,7 +34,6 @@ class DetectionResult:
     detections: list[Detection3D] = field(default_factory=list)
     frame_id: int = 0
     timestamp_s: float = 0.0
-    # Inference metadata.
     inference_time_ms: float = 0.0
 
 
@@ -101,22 +92,11 @@ class PointPillarsDetector(BaseDetector):
         return ["vehicle", "pedestrian", "cyclist"]
 
 
-# ─── OpenCOOD single-agent detector (Phase 2 — inference only, no training) ──────
-#
-# This is the chosen Phase 2 detector (see docs/task_2.1_detector_integration_spec.md).
-# It wraps an OpenCOOD *pretrained* PointPillar model on OPV2V and runs the
-# NO-FUSION (single-agent) config first to establish the single-agent baseline mAP.
-#
-# CRITICAL — how we load OpenCOOD WITHOUT its full install:
-#   `python setup.py install` / `pip install -e .` on OpenCOOD pins numba==0.49.0,
-#   which fails on modern Python (same class of failure we hit before). So we DO NOT
-#   install OpenCOOD as a package. Instead we add the cloned repo to sys.path and
-#   import the specific model + utility modules we need. The CUDA rotated-NMS/IoU ops
-#   OpenCOOD ships may need compilation; if they are unavailable we fall back to the
-#   pure-Python BEV IoU + a simple score-threshold + greedy NMS (see _fallback_nms).
-#
-# Everything below the model-load boundary is plain tensor/array plumbing and is
-# testable without a GPU. Only `_lazy_load_model` and the forward pass need Kaggle GPU.
+# ─── OpenCOOD single-agent detector (Phase 2 "2a") ───────────────────────────
+# NOTE: superseded by SimulatedDetector — 2a was blocked on Kaggle (spconv/mmcv vs
+# Python 3.12). Kept as the drop-in real-detector upgrade for a Python-3.10 env.
+# Load approach: add the cloned OpenCOOD repo to sys.path and import the model
+# modules directly — do NOT `pip install` it (pins numba==0.49.0, fails on 3.12).
 
 
 class OpenCOODDetector(BaseDetector):
