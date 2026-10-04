@@ -46,7 +46,7 @@ class CommunicationEnv(gym.Env):
         episode_budget_bytes: int = 20000,
         per_step_cap: int = 20,
         obs_bytes: int = 256,
-        lam_bandwidth: float = 0.1,
+        lam_bandwidth: float = 0.05,
         min_agents: int = 2,
         frame_stride: int = 5,
         assoc_radius: float = 2.5,
@@ -83,8 +83,10 @@ class CommunicationEnv(gym.Env):
         # Observation: per-candidate features (padded to num_obs_max) + 1 global budget.
         obs_dim = num_obs_max * self.FEATS + 1
         self.observation_space = spaces.Box(-np.inf, np.inf, (obs_dim,), np.float32)
-        # Action: a transmit score per candidate slot.
-        self.action_space = spaces.Box(0.0, 1.0, (num_obs_max,), np.float32)
+        # Action: a transmit logit per candidate slot. >0 => transmit (centred at 0 so a
+        # fresh Gaussian policy sends ~half). Wider range than [0,1] so PPO can push
+        # scores clearly positive/negative.
+        self.action_space = spaces.Box(-5.0, 5.0, (num_obs_max,), np.float32)
 
         # Episode state (set in reset).
         self._scenario = None
@@ -201,32 +203,33 @@ class CommunicationEnv(gym.Env):
         oc = self._oc
         dets = self._cur_candidates
         n = min(len(dets), self._num_obs_max)
-        # Interpret the action as RANKING SCORES: transmit the top-K by score, where K is
-        # set by the per-step cap AND remaining episode budget. No hard threshold -> the
-        # policy cannot collapse to "transmit nothing"; it learns WHICH to send and (via
-        # the budget coupling) implicitly HOW MANY over the episode. The policy still
-        # controls volume indirectly: a near-uniform action => arbitrary subset; a peaked
-        # action => the detections it deems most valuable fill the K slots.
+        # Per-detection transmit DECISION: transmit candidate i if action[i] > 0 (SB3's
+        # Gaussian policy is centred at 0, so a fresh policy sends ~half -> no "send
+        # nothing" or "send everything" collapse). This lets the policy control BOTH which
+        # detections AND how many. A hard budget cap still applies: if more than the
+        # remaining budget allows pass the threshold, keep the highest-scored ones.
         scores = np.asarray(action, dtype=np.float64)[:n]
         max_by_budget = int(self._budget_left // self._obs_bytes)
-        k = int(min(self._per_step_cap, max_by_budget, n))
-        if k > 0 and n > 0:
-            chosen = list(np.argsort(-scores)[:k])
-        else:
-            chosen = []
+        cap = int(min(self._per_step_cap, max_by_budget))
+        want = [i for i in range(n) if scores[i] > 0.0]
+        if len(want) > cap:  # over budget -> keep highest-scored
+            want = list(np.array(want)[np.argsort(-scores[want])][:cap])
+        chosen = want
         transmit = [dets[i] for i in chosen]
         bytes_sent = len(transmit) * self._obs_bytes
         self._budget_left = max(0, self._budget_left - bytes_sent)
 
-        # Reward: Δ mAP (ego transmits vs. ego stays silent) − λ·bandwidth.
-        # map_silent is independent of the action, so cache it per frame (halves the
-        # expensive fusion+mAP calls -> ~2x faster training).
+        # Reward: Δ mAP (ego transmits vs. ego stays silent) − λ·(fraction of candidates
+        # sent). The penalty is per-detection-fraction so that transmitting a detection
+        # that does NOT raise mAP is net-negative -> the policy must learn to send only
+        # useful detections, not everything. map_silent is action-independent (cached).
         if self._cur_frame_data.get("map_silent") is None:
             self._cur_frame_data["map_silent"] = self._fuse_and_map([])
         map_silent = self._cur_frame_data["map_silent"]
         map_tx = self._fuse_and_map(transmit)
         delta = map_tx - map_silent
-        reward = delta - self._lam * (bytes_sent / max(self._episode_budget, 1))
+        frac_sent = len(transmit) / max(n, 1)
+        reward = delta - self._lam * frac_sent
 
         self._fi_idx += 1
         terminated = self._fi_idx >= len(self._frames)
