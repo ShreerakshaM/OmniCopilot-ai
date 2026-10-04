@@ -324,6 +324,23 @@ TEST(PrioritizerTest, BudgetLimitsSelection) {
   EXPECT_GT(result.total_suppressed_value, 0.0);
 }
 
+TEST(PrioritizerTest, ConfidentDetectionRanksAboveLowConfidence) {
+  // For a detection-ACCURACY objective, a confident detection must outrank a
+  // low-confidence one of the same class. (The original scoring inverted this via a
+  // "low confidence = novel = valuable" heuristic, which lost to random on mAP.)
+  PrioritizationWeights weights;
+  Prioritizer pri(weights);
+
+  Observation hi;
+  hi.object_class = ObjectClass::kVehicle;
+  hi.confidence = 0.9;
+  Observation lo;
+  lo.object_class = ObjectClass::kVehicle;
+  lo.confidence = 0.3;
+
+  EXPECT_GT(pri.Score(hi).total_score, pri.Score(lo).total_score);
+}
+
 TEST(PrioritizerTest, EmptyObservations) {
   PrioritizationWeights weights;
   Prioritizer pri(weights);
