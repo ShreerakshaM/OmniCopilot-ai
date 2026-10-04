@@ -141,19 +141,21 @@ bool Channel::Enqueue(ChannelMessage message) {
 std::vector<ChannelMessage> Channel::Tick(double current_time_s) {
   std::vector<ChannelMessage> delivered;
 
-  while (!impl_->in_flight.empty()) {
-    auto& front = impl_->in_flight.front();
-    if (front.delivery_time_s <= current_time_s) {
-      double latency =
-          (front.delivery_time_s - front.enqueue_time_s) * 1000.0;
-      impl_->total_latency_ms += latency;
+  // Delivery time = enqueue + latency + random JITTER, so in_flight is NOT reliably
+  // ordered by delivery_time (a message enqueued earlier with high jitter can be due
+  // later than one enqueued after it). Scan all and deliver every due message, rather
+  // than breaking at the first not-yet-due one.
+  std::deque<ChannelMessage> remaining;
+  for (auto& msg : impl_->in_flight) {
+    if (msg.delivery_time_s <= current_time_s) {
+      impl_->total_latency_ms += (msg.delivery_time_s - msg.enqueue_time_s) * 1000.0;
       impl_->total_delivered++;
-      delivered.push_back(std::move(front));
-      impl_->in_flight.pop_front();
+      delivered.push_back(std::move(msg));
     } else {
-      break;  // Remaining messages are not yet due (deque is roughly ordered).
+      remaining.push_back(std::move(msg));
     }
   }
+  impl_->in_flight = std::move(remaining);
 
   return delivered;
 }

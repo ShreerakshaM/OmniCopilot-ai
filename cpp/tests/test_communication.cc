@@ -173,6 +173,34 @@ TEST(ChannelTest, BasicEnqueueAndDeliver) {
   EXPECT_EQ(delivered[0].message_id, "m1");
 }
 
+TEST(ChannelTest, DeliversOutOfOrderJitter) {
+  // With jitter, a message enqueued earlier can be due LATER than a later one.
+  // Tick must deliver every due message, not stop at the first not-yet-due one.
+  ChannelConfig config;
+  config.max_bandwidth_bps = 1e9;
+  config.base_latency_ms = 10.0;
+  config.latency_jitter_ms = 40.0;  // large jitter -> reordering likely
+  config.packet_loss_rate = 0.0;
+  config.max_queue_depth = 100;
+  Channel ch(config);
+
+  // Enqueue many messages at the same time; jitter scrambles their delivery times.
+  for (int i = 0; i < 50; ++i) {
+    ChannelMessage m;
+    m.message_id = "m" + std::to_string(i);
+    m.sender_id = "a1";
+    m.receiver_id = "a2";
+    m.size_bytes = 64;
+    m.enqueue_time_s = 1.0;
+    ch.Enqueue(m);
+  }
+
+  // After well past max possible delivery time (10+40ms = 50ms), ALL must arrive.
+  auto delivered = ch.Tick(1.1);  // 100ms
+  EXPECT_EQ(delivered.size(), 50u);
+  EXPECT_EQ(ch.GetState().queue_depth, 0u);
+}
+
 TEST(ChannelTest, PacketLossDropsMessages) {
   ChannelConfig config;
   config.max_bandwidth_bps = 1e9;
