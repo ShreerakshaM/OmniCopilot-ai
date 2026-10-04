@@ -93,8 +93,8 @@ def main() -> None:
 
     # ── Train PPO ──
     print(f"\nTraining PPO for {args.timesteps} timesteps...")
-    model = PPO("MlpPolicy", env, verbose=1, seed=args.seed,
-                learning_rate=3e-4, n_steps=2048, batch_size=256, gamma=0.99,
+    model = PPO("MlpPolicy", env, verbose=1, seed=args.seed, device="cpu",
+                learning_rate=3e-4, n_steps=512, batch_size=128, gamma=0.99,
                 gae_lambda=0.95, clip_range=0.2, ent_coef=0.01)
     model.learn(total_timesteps=args.timesteps)
 
