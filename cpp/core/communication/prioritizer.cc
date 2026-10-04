@@ -56,26 +56,25 @@ ScoredObservation Prioritizer::Score(const Observation& obs) const {
       break;
   }
 
-  // Confidence score: moderate confidence is most valuable.
-  // Very high confidence = receiver likely already knows.
-  // Very low confidence = probably noise.
-  // Peak value around 0.5-0.7.
-  scored.confidence_score =
-      1.0 - std::pow(2.0 * obs.confidence - 1.0, 2.0);
-  scored.confidence_score = std::clamp(scored.confidence_score, 0.0, 1.0);
+  // Confidence score: for a DETECTION-ACCURACY objective, prefer confident detections
+  // (likely correct). Transmitting low-confidence detections pollutes the fused result,
+  // so confidence maps monotonically to value. (The earlier "peak at 0.5" novelty-style
+  // curve conflicted with the mAP objective — it preferred far/noisy detections.)
+  scored.confidence_score = std::clamp(obs.confidence, 0.0, 1.0);
 
-  // Novelty: approximated by inverse confidence (low confidence = likely new).
-  // True novelty requires receiver model — this is the hand-designed fallback.
-  scored.novelty_score = 1.0 - obs.confidence;
+  // Novelty: without a receiver model we cannot measure true novelty. For an accuracy
+  // objective we do NOT equate "low confidence" with "novel/valuable" (that preferred
+  // likely-wrong detections). Use a neutral mid value so novelty neither rewards nor
+  // penalizes until the receiver model (Task 4.3) supplies a real signal.
+  scored.novelty_score = 0.5;
 
   // Time sensitivity: faster objects are more time-sensitive.
   double speed = obs.velocity.Magnitude();
   scored.time_sensitivity_score = std::clamp(speed / 20.0, 0.0, 1.0);
 
-  // Receiver benefit: placeholder — the full receiver model handles this.
-  // Default: proportional to safety × (1 - confidence).
-  scored.receiver_benefit_score =
-      scored.safety_score * (1.0 - obs.confidence);
+  // Receiver benefit: a confident, safety-relevant detection is the most beneficial to
+  // share for accuracy (likely true AND important). Proportional to safety x confidence.
+  scored.receiver_benefit_score = scored.safety_score * obs.confidence;
 
   // Total weighted score.
   scored.total_score =
