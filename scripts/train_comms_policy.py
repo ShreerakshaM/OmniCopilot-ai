@@ -78,13 +78,16 @@ def main() -> None:
     rng = np.random.default_rng(args.seed)
     adim = env.action_space.shape[0]
 
-    # ── Baselines (evaluated on the same env, before training) ──
+    # ── Baselines (same env, new action semantics: value > 0 => transmit) ──
+    #   random      : random logits in [-5,5] -> sends ~half (the real naive baseline)
+    #   always_send : all +5 -> transmit every candidate (full bandwidth)
+    #   never_send  : all -5 -> transmit nothing
     baselines = {
-        "random": eval_policy(env, lambda o: rng.random(adim).astype(np.float32),
+        "random": eval_policy(env, lambda o: rng.uniform(-5, 5, adim).astype(np.float32),
                               args.eval_episodes, rng),
-        "always_send": eval_policy(env, lambda o: np.ones(adim, np.float32),
+        "always_send": eval_policy(env, lambda o: np.full(adim, 5.0, np.float32),
                                    args.eval_episodes, rng),
-        "never_send": eval_policy(env, lambda o: np.zeros(adim, np.float32),
+        "never_send": eval_policy(env, lambda o: np.full(adim, -5.0, np.float32),
                                   args.eval_episodes, rng),
     }
     print("Baselines:")
