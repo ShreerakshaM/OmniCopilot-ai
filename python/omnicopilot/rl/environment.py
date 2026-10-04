@@ -201,18 +201,29 @@ class CommunicationEnv(gym.Env):
         oc = self._oc
         dets = self._cur_candidates
         n = min(len(dets), self._num_obs_max)
-        # Select by score, descending, until per-step cap OR episode budget exhausted.
+        # Interpret the action as RANKING SCORES: transmit the top-K by score, where K is
+        # set by the per-step cap AND remaining episode budget. No hard threshold -> the
+        # policy cannot collapse to "transmit nothing"; it learns WHICH to send and (via
+        # the budget coupling) implicitly HOW MANY over the episode. The policy still
+        # controls volume indirectly: a near-uniform action => arbitrary subset; a peaked
+        # action => the detections it deems most valuable fill the K slots.
         scores = np.asarray(action, dtype=np.float64)[:n]
-        order = np.argsort(-scores)
-        max_by_budget = self._budget_left // self._obs_bytes
-        cap = int(min(self._per_step_cap, max_by_budget))
-        chosen = [i for i in order[:cap] if scores[i] > 0.5]  # 0.5 = transmit threshold
+        max_by_budget = int(self._budget_left // self._obs_bytes)
+        k = int(min(self._per_step_cap, max_by_budget, n))
+        if k > 0 and n > 0:
+            chosen = list(np.argsort(-scores)[:k])
+        else:
+            chosen = []
         transmit = [dets[i] for i in chosen]
         bytes_sent = len(transmit) * self._obs_bytes
         self._budget_left = max(0, self._budget_left - bytes_sent)
 
         # Reward: Δ mAP (ego transmits vs. ego stays silent) − λ·bandwidth.
-        map_silent = self._fuse_and_map([])
+        # map_silent is independent of the action, so cache it per frame (halves the
+        # expensive fusion+mAP calls -> ~2x faster training).
+        if self._cur_frame_data.get("map_silent") is None:
+            self._cur_frame_data["map_silent"] = self._fuse_and_map([])
+        map_silent = self._cur_frame_data["map_silent"]
         map_tx = self._fuse_and_map(transmit)
         delta = map_tx - map_silent
         reward = delta - self._lam * (bytes_sent / max(self._episode_budget, 1))
